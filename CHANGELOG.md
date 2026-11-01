@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.30.1] — 2026-11-01
+
+### Changed
+- **Game lists say what they show.** The All Games list on the Meta page now names the version, battle type and team size it is filtered to, so a game of another type no longer looks missing. The All Games list for admins now shows each game's battle type.
+
 ## [2.30.0] — 2026-11-01
 
 ### Added

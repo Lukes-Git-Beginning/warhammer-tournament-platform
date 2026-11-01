@@ -193,6 +193,15 @@ export function MetaDashboard() {
 
   const hasNoVersion = !!versionsData && versions.length === 0;
   const hasVersion = !!versionId;
+  // The games list follows the filters at the top of the page, so its heading names them: a game
+  // of another battle type is filtered out, not missing.
+  const gamesFilterLabel = [
+    versions.find((v) => v.id === versionId)?.name,
+    BATTLE_TYPES.find((b) => b.value === battleType)?.label,
+    is2v2 ? '2v2' : '1v1',
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <PageShell variant="wide">
@@ -412,11 +421,12 @@ export function MetaDashboard() {
         </>
       )}
 
-      {/* ─── Global Game History (filtered to the selected format) ─── */}
+      {/* ─── Global Game History (filtered to the selected version, battle type and format) ─── */}
       <section className="mt-10">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-4">
           <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500">
             All Games
+            <span className="ml-2 font-sans text-sm font-medium text-rizzotto-stone-300">· {gamesFilterLabel}</span>
             {gamesData && <span className="ml-2 text-sm font-normal text-stone-500">({gamesData.total} total)</span>}
           </h2>
           {gamesData && gamesData.total > GAMES_PAGE_SIZE && (
