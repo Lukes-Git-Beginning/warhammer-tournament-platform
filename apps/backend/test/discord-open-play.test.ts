@@ -10,11 +10,14 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '@rizzotto/db';
 import { buildApp } from '../src/app.js';
-import { QUEUE_KEY, JOINED_AT_KEY, QUEUE_PREFS_KEY, announceMatch } from '../src/lib/matchmaking-tick.js';
+import { QUEUE_KEY, JOINED_AT_KEY, QUEUE_PREFS_KEY, announceMatch, parseQueuePrefs } from '../src/lib/matchmaking-tick.js';
 import { createOpenPlayMatch } from '../src/lib/create-open-play-match.js';
 import { deleteOriginalLater, handleOpenPlayInteraction, type Interaction } from '../src/lib/discord-open-play-interactions.js';
 import {
   renderJoinDm,
+  renderJoinPanel,
+  restartPreview,
+  tickerOffers,
   renderMatchCard,
   renderTickerPost,
   registerDiscordCommands,
@@ -163,6 +166,18 @@ describe('join DM', () => {
     expect(customIds(dm.components)).toEqual(['oq_bt', 'oq_fmt', 'oq_size', 'oq_join']);
     const bt = flat(dm.components).find((c) => c.custom_id === 'oq_bt')!;
     expect(bt.options!.every((o) => o.default)).toBe(true); // defaults: every battle type
+  });
+
+  it('lists Domquest first in the join DM, a default ticker post and the preview card', async () => {
+    const u = await player('dop_order');
+    const dm = await renderJoinDm(app, u.id);
+    expect(flat(dm.components).find((c) => c.custom_id === 'oq_bt')!.options![0]!.value).toBe('DOMQUEST');
+    expect(tickerOffers(parseQueuePrefs(null))[0]!.battleType).toBe('DOMQUEST');
+    expect((await restartPreview(app, u.id)).content).toContain('Domquest');
+  });
+
+  it('the panel explains Open Play on How to Play', () => {
+    expect(JSON.stringify(renderJoinPanel().components)).toContain('/how-to-play#discord');
   });
 
   it('saves every change straight away and re-renders in place', async () => {

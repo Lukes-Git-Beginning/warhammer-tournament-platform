@@ -9,8 +9,7 @@ import { RIZZOTTOVERSE_INVITE, useArenaMod } from '@/lib/arenaMod';
 /**
  * The whole onboarding (Alex, 2026-10-27): a welcome with the two things every player needs, the
  * RizzOttoverse Discord server (match notifications come as bot DMs) and RizzOtto's Arena Mod, then done.
- * Hints only, no gate. Logging in usually adds the player to the server already (guilds.join), so the
- * Discord card says so when the bot saw him there.
+ * Hints only, no gate. The Discord card says so when the bot already saw the player on the server.
  */
 export function OnboardingWelcome({ onDone, isDone }: { onDone: () => void; isDone: boolean }) {
   const { t } = useTranslation();

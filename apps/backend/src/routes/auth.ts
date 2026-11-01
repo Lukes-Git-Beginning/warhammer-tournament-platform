@@ -27,10 +27,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   const clientId = process.env.DISCORD_CLIENT_ID;
   const clientSecret = process.env.DISCORD_CLIENT_SECRET;
   const redirectUri = process.env.DISCORD_REDIRECT_URI;
-  // guilds.join is always requested, whatever DISCORD_SCOPES says: it lets the login add the player
-  // to the RizzOttoverse Discord server (see the auto-join below). Production's env still lists only
-  // "identify email", and that file can't be changed from the repo.
-  const scopeStr = [...new Set([...(process.env.DISCORD_SCOPES ?? 'identify email').split(/\s+/), 'guilds.join'])].join(' ');
+  const scopeStr = process.env.DISCORD_SCOPES ?? 'identify email';
   const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
   if (!clientId || !clientSecret || !redirectUri) {
@@ -142,6 +139,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       // a member. Requires guilds.join scope + a resolvable guild id (env override or
       // auto-detected from the bot token). Fire-and-forget: the guild resolution + calls
       // run inside the async IIFE so they never add latency to the login flow.
+      // Discord also requires the bot to belong to the app the user logged in with. On prod they are
+      // two apps (Rizzotto.gg and RizzBOTto), so the add fails there and only the membership is recorded.
       const botToken = process.env.DISCORD_BOT_TOKEN;
       if (botToken) {
         void (async () => {

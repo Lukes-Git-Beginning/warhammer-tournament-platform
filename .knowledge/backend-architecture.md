@@ -216,7 +216,7 @@ Zwei Quell-Files: `.env.example` im repo-root (Dev-Defaults) und `deploy/.env.pr
 | `DISCORD_CLIENT_ID` | `123456789` | Discord OAuth2 App-ID | Ja |
 | `DISCORD_CLIENT_SECRET` | `secret` | Discord OAuth2 Secret | Ja |
 | `DISCORD_REDIRECT_URI` | `http://localhost:3000/auth/discord/callback` | OAuth Callback-URL | Ja |
-| `DISCORD_SCOPES` | `identify email` | OAuth-Scopes; default `identify email`; `guilds.join` wird immer ergänzt (routes/auth.ts) | Nein |
+| `DISCORD_SCOPES` | `identify email` | OAuth-Scopes; default `identify email` | Nein |
 | `FRONTEND_URL` | `http://localhost:5173` | CORS-Origin + Redirect nach Login | Nein |
 | `BACKEND_URL` | `http://localhost:3000` | Für interne Referenzen | Nein |
 | `PORT` | `3000` | HTTP-Port; default 3000 | Nein |

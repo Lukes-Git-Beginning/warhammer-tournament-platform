@@ -36,6 +36,7 @@ const SECTIONS = [
   { id: 'rules', title: 'Rules you follow yourself' },
   { id: 'open-play', title: 'Open Play conduct' },
   { id: 'matches', title: 'Playing a match on rizzotto.gg' },
+  { id: 'discord', title: 'Open Play on Discord' },
   { id: 'faq', title: 'FAQ' },
 ] as const;
 
@@ -360,6 +361,42 @@ export function HowToPlayPage() {
             </li>
             <li>Your opponent confirms or disputes the result. Without an answer it is confirmed after 30 minutes.</li>
           </ol>
+        </Section>
+
+        <Section id="discord" number={7} title="Open Play on Discord">
+          <p>
+            You can play Open Play from Discord too, on any server with our bot, RizzBOTto. It is the same queue as on
+            the site, with the same rules and strikes.
+          </p>
+          <SubHeading>Joining the queue</SubHeading>
+          <ol className={ol}>
+            <li>
+              Type <code className={code}>/join</code> on the server, or press &quot;Find a game&quot; on the panel pinned
+              in its Open Play channel (<code className={code}>#open-play-ticker</code> on the RizzOttoverse).
+            </li>
+            <li>No account yet? You get a link to log in and connect Steam, once. After that the bot takes over.</li>
+            <li>
+              RizzBOTto sends you a DM with your queue settings: battle types, Bo1 or Bo3, 1v1 or 2v2. They are the same
+              settings as on the{' '}
+              <Link to="/open-play" className={linkClass}>
+                Open Play
+              </Link>{' '}
+              page. Pick what you want to play and press &quot;Join queue&quot;.
+            </li>
+          </ol>
+          <p>No DM? Allow direct messages from server members in that server&apos;s privacy settings, then try again.</p>
+          <SubHeading>Playing the match in your DMs</SubHeading>
+          <p>
+            When a 1v1 game is found, your match card comes to your DMs. You can play the whole match from there: pick
+            your faction, enter the lobby code, report the result and upload the replay. The card and the match page show
+            the same match, so you can switch to the site at any time. 2v2 matches are played on the site.
+          </p>
+          <SubHeading>The ticker channel</SubHeading>
+          <p>
+            The channel shows who is looking for a game right now, on the site and on Discord alike. Requests stay
+            anonymous until the match is made. Press a button to take a game with the battle type and length it names, and
+            you are matched right away. A matched request then shows both names and disappears after 15 minutes.
+          </p>
         </Section>
 
         <Section id="faq" title="FAQ">

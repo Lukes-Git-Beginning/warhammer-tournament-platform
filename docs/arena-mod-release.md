@@ -17,7 +17,7 @@ proofread before release.
 - Rule cards show only what players watch themselves (arena mode with the mod, conduct incl. Land Battle's rules
   of play) plus a note on what the mod enforces. The Fruit Rules links (Drive PDFs) are gone from the cards.
 - Required-mod notice: RizzOtto's Arena Mod for every battle type, with version and "How to install".
-- Header tabs **How to Play** (new page: install, what's in the mod, Domquest, rules, a match, FAQ) and **Fruit Rules**
+- Header tabs **How to Play** (new page: install, what's in the mod, Domquest, rules, a match, Open Play on Discord, FAQ) and **Fruit Rules**
   (public, in the sitemap, new intro). "What's in the mod" and "Domquest" follow the Workshop description
   (`tww3-modding/domquest/workshop/description_en.txt`); when the mod changes, update both. Its lobby settings and
   the rules come from the live Standard Rulesets, split into what every type shares and what each adds.
@@ -33,7 +33,7 @@ proofread before release.
 - Onboarding is one welcome page (Discord server + the mod), shown once after a player's first login. The old
   overlay (settings, spotlight tour) had been unmounted since 2026-06-13 and is gone; migration `20261027100400`
   marks every existing player as onboarded, so only new players see it. `/api/users/me` carries `discord_member`,
-  so the Discord card says "Logging in added you" when the bot saw him there.
+  so the Discord card says "You're on our Discord server" when the bot saw him there.
 - Release banner for existing players who are not on the RizzOttoverse Discord server, dismissable for good.
 - Landing page: the Ko-Fi band above the hero now leads with the release ("RizzOtto's Arena Mod is out, with
   Domquest", How to Play button) and keeps the Ko-Fi invite. Admin → Welcome Banner is not shown anywhere on
@@ -42,21 +42,24 @@ proofread before release.
   is not on the server gets a full-screen prompt on his next visit ("Join the server" / "Continue to the site"),
   again each week until he is on the server. No permanent opt-out. The first check runs on the first Monday
   after the deploy.
-- Discord login always asks for `guilds.join`, so logging in adds players to the server.
+- Logging in does not add players to the server. Discord only allows that when login and bot are the same
+  application, and on prod they are two (Rizzotto.gg, RizzBOTto). So the login keeps its scopes, and the release
+  banner, the welcome page and the weekly prompt ask players to join.
 
 ## Release day, in order
 
 1. **Mod:** the Workshop item is listed and its description carries `Current version: 1.0`.
 2. **Domination pool:** final as wanted. The deploy copies every available Domination map into the Domquest pool.
-3. **Branch:** rebase `feat/arena-mod-release` onto `main`, CI green, set the `## [3.0.0]` date to the release
+3. **Branch:** merge `main` into `feat/arena-mod-release`, CI green, set the `## [3.0.0]` date to the release
    day, Alex's go, no ongoing tournament.
-4. **Deploy:** fast-forward `main`. The changelog bot posts 3.0.0 on boot.
+4. **Deploy:** fast-forward `main`. The changelog bot posts 3.0.0 on boot, in the private changelog channel.
 5. **Check on prod:** `/api/meta/arena-mod` shows `listed: true` and the version (at most 15 minutes after
    listing); `/api/maps?battle_type=DOMQUEST` returns the pool; the How to Play and Fruit Rules tabs; a ruleset
    card; the Domquest filter on Tournaments and Leaderboard.
 6. **Ban lists (Alex, Admin → Settings → Standard Ruleset):** remove what the mod now fixes or rebalances
    (Dechala, Zombie Dragon, Manticore Mount (Dieter Helsnicht), Chalice of Blood & Darkness, Ghostly Howl) from
-   every combo. The lists only show in the admin editor, so nothing else depends on it.
+   every combo. Only these five entries; the other bans, the settings and the conduct stay. The lists only show
+   in the admin editor, so nothing else depends on it.
 7. **Broadcast DM:** to everyone the bot may DM, text below.
 8. **Discord posts / video:** Alex.
 9. Optional: replace `public/img/how-to-play/lobby-warning.jpg` with a screenshot from the release build (the

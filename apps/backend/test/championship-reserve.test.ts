@@ -107,6 +107,42 @@ const seedsOf = async (tournamentId: string) =>
     (await prisma.tournamentParticipant.findMany({ where: { tournament_id: tournamentId, status: 'CHECKED_IN' } })).map((p) => [p.user_id, p.seed]),
   );
 
+describe('A ladder final in another battle type', () => {
+  it('seeds from the confirmed invites and promotes a reserve like a Domination final', async () => {
+    const t = await prisma.tournament.create({
+      data: {
+        slug: `reserve-${Math.random().toString(36).slice(2, 8)}`,
+        name: 'Domquest Ladder Final',
+        host_id: HOST_ID,
+        format: 'SINGLE_ELIMINATION',
+        status: 'REGISTRATION_CLOSED',
+        start_date: new Date('2099-01-31T18:00:00.000Z'),
+        timezone: 'Europe/Berlin',
+        battle_type: 'DOMQUEST',
+        championship_kind: 'MONTHLY_LADDER',
+        championship_period: '2099-01',
+        championship_field_size: 4,
+        availability_opened_at: new Date(),
+        rsvp_deadline: new Date(Date.now() + 86_400_000),
+      },
+    });
+    await prisma.championshipInvite.createMany({
+      data: [1, 2, 3, 4, 5].map((n) => ({ tournament_id: t.id, competitor_id: pid(n), user_id: pid(n), rank: n, rsvp: 'AVAILABLE' as const })),
+    });
+
+    const seeded = await app.inject({ method: 'POST', url: `/api/championships/${t.slug}/seed`, cookies: { auth_token: token(ADMIN_ID, 'ADMIN') } });
+    expect(seeded.statusCode).toBe(200);
+    expect(await seedsOf(t.id)).toEqual({ [pid(1)]: 1, [pid(2)]: 2, [pid(3)]: 3, [pid(4)]: 4 });
+
+    const view = await field(t.slug);
+    expect(view.phase).toBe('SEEDED');
+    expect(view.entries.filter((e) => e.reserve).map((e) => e.competitorId)).toEqual([pid(5)]);
+
+    expect((await promote(t.slug, { dropCompetitorId: pid(2) })).statusCode).toBe(200);
+    expect(await seedsOf(t.id)).toEqual({ [pid(1)]: 1, [pid(3)]: 2, [pid(4)]: 3, [pid(5)]: 4 });
+  });
+});
+
 describe('Championship reserve', () => {
   it('the seeded field view lists the reserve (by rank) and withdrawn finalists', async () => {
     const { id, slug } = await seededFinal();

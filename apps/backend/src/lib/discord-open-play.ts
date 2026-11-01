@@ -826,7 +826,7 @@ export function renderJoinPanel(stats?: PanelStats): DiscordMessage {
       `**Find an Open Play game**\nType \`/join\` anywhere on this server, or press the button. RizzBOTto sends you a DM where you ` +
       `pick battle types, Bo1/Bo3 and team size, then you play the whole match in that DM or on rizzotto.gg.\n` +
       `Open requests show up in this channel. Click one to take the match.${live}`,
-    components: [row(btn('Find a game', 'jp_find', PRIMARY), linkBtn('How Open Play works', `${siteUrl()}/open-play`))],
+    components: [row(btn('Find a game', 'jp_find', PRIMARY), linkBtn('How Open Play works', `${siteUrl()}/how-to-play#discord`))],
     allowed_mentions: noMentions,
   };
 }
