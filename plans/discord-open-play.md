@@ -167,6 +167,14 @@ format, map, game n of N and the deadlines, plus a link button "Open on rizzotto
 `/ladder` (private reply) or a pinned, auto-updated message with the Monthly Ladder top N. A VL-only board stays
 optional.
 
+### 10. Where joins come from (Alex 2026-11-01)
+
+The admin queue report shows joins per source (site, join DM, other DM buttons) and server, plus every Discord click
+and what it led to (DM sent, setup link, match, too late, other). A join DM counts for the server of the player's last
+`/join`, panel or ticker setup click, because Discord names no server inside a DM. Taking an offer never joins the
+queue, so ticker and availability clicks only show as clicks. Discord tells a bot nothing about who merely reads a
+channel, so views can't be measured.
+
 ## Open points
 
 - **VL picking:** does the VL need pick 3 / ban 1 and the 2 weekly global bans in Open Play? (A player also asked

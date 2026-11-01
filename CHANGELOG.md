@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.30.0] — 2026-11-01
+
+### Added
+- **Where Open Play joins come from.** The Open Play queue report for admins now shows whether a join came from the site or from Discord, and from which server. It also counts the clicks on `/join`, the panel, ticker requests and availability DM offers, and what they led to.
+
 ## [2.29.0] — 2026-11-01
 
 ### Added

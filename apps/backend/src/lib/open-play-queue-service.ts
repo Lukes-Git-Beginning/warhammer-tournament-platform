@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import type { QueueJoinVia } from '@rizzotto/db';
 import { logQueueActivity } from './queue-activity.js';
 import { QUEUE_KEY, JOINED_AT_KEY, JOIN_SCRIPT, QUEUE_PREFS_KEY, runMatchmakingTick } from './matchmaking-tick.js';
 import type { QueueBattleType, QueueCompetitorFormat, QueueMatchFormat } from './queue-matching.js';
@@ -38,10 +39,17 @@ function fail(statusCode: number, error: string, message: string, code?: Extract
   return { ok: false, statusCode, error, message, ...(code ? { code } : {}) };
 }
 
+/** Where a queue join came from, for the admin queue report. */
+export interface QueueJoinOrigin {
+  via: QueueJoinVia;
+  guildId?: string | null;
+}
+
 export async function joinOpenPlayQueue(
   fastify: FastifyInstance,
   userId: string,
   body: QueueJoinRequest,
+  origin: QueueJoinOrigin,
 ): Promise<QueueJoinResult> {
   const redis = fastify.redis;
   if (!redis) return fail(503, 'ServiceUnavailable', 'Queue service unavailable');
@@ -122,7 +130,7 @@ export async function joinOpenPlayQueue(
   await redis.hset(QUEUE_PREFS_KEY, queueId, JSON.stringify(prefs));
   if (body.save) await saveQueuePrefs(fastify.prisma, userId, effective);
 
-  await logQueueActivity(fastify.prisma, 'JOIN', userId);
+  await logQueueActivity(fastify.prisma, 'JOIN', userId, origin);
   await runMatchmakingTick(fastify);
 
   // The tick removes matched players from the queue — if we're gone, we matched.

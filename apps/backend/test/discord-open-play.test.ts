@@ -120,11 +120,12 @@ afterEach(async () => {
   await prisma.matchGame.deleteMany({ where: { match: { type: 'OPEN_PLAY', OR: [{ player1_id: { in: ids } }, { player2_id: { in: ids } }] } } });
   await prisma.match.deleteMany({ where: { type: 'OPEN_PLAY', OR: [{ player1_id: { in: ids } }, { player2_id: { in: ids } }] } });
   await prisma.queueActivityLog.deleteMany({ where: { user_id: { in: ids } } });
+  await prisma.discordClick.deleteMany({ where: { user_id: { in: ids } } });
   await prisma.userQueuePref.deleteMany({ where: { user_id: { in: ids } } });
   await prisma.botMessage.deleteMany({ where: { target_id: { in: users.map((u) => u.discord_id) } } });
   await cleanupUsers(ids);
   for (const u of users) {
-    await app.redis.del(`rizzotto:dop:join:${u.id}`, `rizzotto:queue:timeout:${u.id}`);
+    await app.redis.del(`rizzotto:dop:join:${u.id}`, `rizzotto:queue:timeout:${u.id}`, `rizzotto:dop:server:${u.discord_id}`);
   }
   users = [];
   calls = [];
@@ -200,7 +201,7 @@ describe('join DM', () => {
   it('the strike cooldown also blocks a join from Discord', async () => {
     const u = await player('dop_cooldown');
     await app.redis.set(`rizzotto:queue:timeout:${u.id}`, '1', 'EX', 600);
-    const blocked = await joinOpenPlayQueue(app, u.id, {});
+    const blocked = await joinOpenPlayQueue(app, u.id, {}, { via: 'SITE' });
     expect(blocked.ok).toBe(false);
 
     const i = interaction(u, 3, { custom_id: 'oq_join' }, { id: 'm1', channel_id: 'dm-x' });
@@ -461,6 +462,76 @@ describe('channel confirmations', () => {
 });
 
 // ---- rollout -----------------------------------------------------------------------------------
+describe('where joins come from', () => {
+  const clicks = (u: TestUser) =>
+    prisma.discordClick.findMany({ where: { user_id: u.id }, select: { kind: true, outcome: true, guild_id: true, match_id: true } });
+  const joinLog = (u: TestUser) =>
+    prisma.queueActivityLog.findMany({ where: { user_id: u.id, event: 'JOIN' }, select: { via: true, guild_id: true } });
+
+  it('a join DM counts for the server of the last /join or panel click', async () => {
+    const u = await player('dop_src');
+    await handleOpenPlayInteraction(app, { ...interaction(u, 2, { name: 'join' }), guild_id: 'guild-a' });
+    await vi.waitFor(async () => expect(await clicks(u)).toHaveLength(1), { timeout: 8000, interval: 50 });
+    await handleOpenPlayInteraction(app, { ...interaction(u, 3, { custom_id: 'jp_find' }), guild_id: 'guild-b' });
+    await vi.waitFor(async () => expect(await clicks(u)).toHaveLength(2), { timeout: 8000, interval: 50 });
+    expect(await clicks(u)).toEqual(
+      expect.arrayContaining([
+        { kind: 'JOIN_COMMAND', outcome: 'DM_SENT', guild_id: 'guild-a', match_id: null },
+        { kind: 'PANEL_BUTTON', outcome: 'DM_SENT', guild_id: 'guild-b', match_id: null },
+      ]),
+    );
+
+    // In the DM itself Discord names no server.
+    const join = interaction(u, 3, { custom_id: 'oq_join' }, { id: 'm1', channel_id: 'dm-x' });
+    await handleOpenPlayInteraction(app, join);
+    await waitForWebhook(join.token);
+    expect(await joinLog(u)).toEqual([{ via: 'JOIN_DM', guild_id: 'guild-b' }]);
+  });
+
+  it('a join DM without a known server still counts as Discord', async () => {
+    const u = await player('dop_src_none');
+    const join = interaction(u, 3, { custom_id: 'oq_join' }, { id: 'm1', channel_id: 'dm-x' });
+    await handleOpenPlayInteraction(app, join);
+    await waitForWebhook(join.token);
+    expect(await joinLog(u)).toEqual([{ via: 'JOIN_DM', guild_id: null }]);
+  });
+
+  it('a ticker click records its server and how it ended, without a join', async () => {
+    const waiting = await player('dop_src_wait');
+    await joinOpenPlayQueue(app, waiting.id, { battleTypes: ['LAND_BATTLE'], matchFormats: ['BO3'] }, { via: 'SITE' });
+    expect(await joinLog(waiting)).toEqual([{ via: 'SITE', guild_id: null }]);
+
+    const u = await player('dop_src_click');
+    const taken = { ...interaction(u, 3, { custom_id: 'tk:L:3:1' }), guild_id: 'guild-a' };
+    await handleOpenPlayInteraction(app, taken);
+    await waitForWebhook(taken.token);
+    const [click] = await clicks(u);
+    expect(click).toMatchObject({ kind: 'TICKER_OFFER', outcome: 'MATCHED', guild_id: 'guild-a' });
+    expect(click!.match_id).not.toBeNull();
+    expect(await joinLog(u)).toEqual([]);
+
+    const late = await player('dop_src_late');
+    const gone = { ...interaction(late, 3, { custom_id: 'tk:L:3:1' }), guild_id: 'guild-a' };
+    await handleOpenPlayInteraction(app, gone);
+    await waitForWebhook(gone.token);
+    expect(await clicks(late)).toEqual([{ kind: 'TICKER_OFFER', outcome: 'GONE', guild_id: 'guild-a', match_id: null }]);
+  });
+
+  it('a click without an account is counted too', async () => {
+    const stranger: TestUser = { id: '00000000-0000-0000-0000-000000000000', discord_id: 'stranger-1', username: 'x' } as TestUser;
+    const before = await prisma.discordClick.count({ where: { user_id: null, guild_id: 'guild-new' } });
+    const i = { ...interaction(stranger, 2, { name: 'join' }), guild_id: 'guild-new' };
+    await handleOpenPlayInteraction(app, i);
+    await waitForWebhook(i.token);
+    await vi.waitFor(async () => expect(await prisma.discordClick.count({ where: { user_id: null, guild_id: 'guild-new', outcome: 'SETUP_LINK' } })).toBe(before + 1), {
+      timeout: 8000,
+      interval: 50,
+    });
+    await prisma.discordClick.deleteMany({ where: { guild_id: 'guild-new' } });
+    await app.redis.del('rizzotto:dop:server:stranger-1', 'rizzotto:dop:pending:stranger-1');
+  });
+});
+
 describe('rollout: testers only until go-live', () => {
   afterEach(() => setRollout({ live: true, testerDiscordIds: [] }));
 

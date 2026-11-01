@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getAdminQueueReport, type AdminQueueReport } from '@/lib/api.js';
+import { getAdminQueueReport, type AdminQueueReport, type DiscordClickKind, type QueueJoinVia } from '@/lib/api.js';
 import { formatReportDay, formatWait, queueTotals } from '@/lib/queue-report';
 import { Kpi } from './PlayersReport.js';
 import { Heat } from './ScheduleReport.js';
@@ -17,6 +17,18 @@ const LAYERS: { key: Layer; label: string; hint: string }[] = [
 
 const num = 'px-2 py-1.5 text-right tabular-nums';
 
+const VIA_LABELS: Record<QueueJoinVia, string> = {
+  SITE: 'Site',
+  JOIN_DM: 'Discord: join DM',
+  DM_BUTTON: 'Discord: DM button',
+};
+const CLICK_LABELS: Record<DiscordClickKind, string> = {
+  JOIN_COMMAND: '/join',
+  PANEL_BUTTON: 'Panel button',
+  TICKER_OFFER: 'Ticker request',
+  AVAILABILITY_OFFER: 'Availability DM offer',
+};
+
 /**
  * What became of every Open Play queue join (backend lib/admin-queue-report.ts): matched, left or
  * timed out, per day and by weekday × hour, in site time.
@@ -29,6 +41,7 @@ export function QueueReport({ days }: { days: number }) {
     staleTime: 60_000,
   });
   const t = useMemo(() => queueTotals(data?.daily ?? []), [data]);
+  const server = (guildId: string | null) => (guildId ? (data?.serverNames[guildId] ?? guildId) : 'None');
 
   if (isLoading) return <p className="py-4 text-center text-sm text-stone-400">Loading…</p>;
   if (error || !data) {
@@ -94,6 +107,93 @@ export function QueueReport({ days }: { days: number }) {
           ))}
         </div>
         <Heat grid={data[layer]} />
+      </section>
+
+      <section className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
+        <h3 className="font-display text-base font-semibold text-rizzotto-gold-500">Where joins come from</h3>
+        <p className="mb-2 text-xs text-stone-500">
+          A join DM counts for the server where the player last used <code>/join</code> or the panel. Other DM buttons have no
+          server. &ldquo;Before tracking&rdquo; is everything from before this was recorded, in practice joins on the site.
+        </p>
+        {data.sources.length === 0 ? (
+          <p className="py-4 text-center text-sm text-stone-500">No queue joins yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs uppercase tracking-wide text-stone-500">
+                <tr>
+                  <th className="px-2 py-1.5">Source</th>
+                  <th className="px-2 py-1.5">Server</th>
+                  <th className={num}>Joins</th>
+                  <th className={num}>Players</th>
+                  <th className={num}>Matched</th>
+                  <th className={num}>Left</th>
+                  <th className={num}>Timed out</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.sources.map((s) => (
+                  <tr key={`${s.via ?? ''}|${s.guildId ?? ''}`} className="border-t border-rizzotto-iron-800 text-stone-300">
+                    <td className="px-2 py-1.5">{s.via ? VIA_LABELS[s.via] : 'Before tracking'}</td>
+                    <td className="px-2 py-1.5">{server(s.guildId)}</td>
+                    <td className={`${num} font-semibold text-stone-100`}>{s.joins}</td>
+                    <td className={num}>{s.players}</td>
+                    <td className={num}>{s.matched}</td>
+                    <td className={num}>{s.left}</td>
+                    <td className={num}>{s.expired}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
+        <h3 className="font-display text-base font-semibold text-rizzotto-gold-500">Discord clicks</h3>
+        <p className="mb-2 text-xs text-stone-500">
+          Every click on a way into Open Play on Discord and what it led to. Taking an offer never joins the queue, so those
+          clicks only show here. Discord doesn&rsquo;t tell us who just looks at a channel.
+        </p>
+        {data.discordClicks.length === 0 ? (
+          <p className="py-4 text-center text-sm text-stone-500">No clicks yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs uppercase tracking-wide text-stone-500">
+                <tr>
+                  <th className="px-2 py-1.5">Click</th>
+                  <th className="px-2 py-1.5">Server</th>
+                  <th className={num}>Clicks</th>
+                  <th className={num}>Players</th>
+                  <th className={num} title="The queue settings went out in a DM">DM sent</th>
+                  <th className={num} title="Took the offer and got a match">Matched</th>
+                  <th className={num} title="No account or no Steam link yet">Setup link</th>
+                  <th className={num} title="Someone else took the game first">Too late</th>
+                  <th className={num} title="Cooldown, active match, DMs closed or an error">Other</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.discordClicks.map((c) => {
+                  const o = c.outcomes;
+                  return (
+                    <tr key={`${c.kind}|${c.guildId ?? ''}`} className="border-t border-rizzotto-iron-800 text-stone-300">
+                      <td className="px-2 py-1.5">{CLICK_LABELS[c.kind]}</td>
+                      <td className="px-2 py-1.5">{server(c.guildId)}</td>
+                      <td className={`${num} font-semibold text-stone-100`}>{c.clicks}</td>
+                      <td className={num}>{c.players}</td>
+                      <td className={num}>{o.DM_SENT ?? 0}</td>
+                      <td className={num}>{o.MATCHED ?? 0}</td>
+                      <td className={num}>{o.SETUP_LINK ?? 0}</td>
+                      <td className={num}>{o.GONE ?? 0}</td>
+                      <td className={num}>{(o.ACTIVE_MATCH ?? 0) + (o.DMS_CLOSED ?? 0) + (o.BLOCKED ?? 0) + (o.FAILED ?? 0)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <section className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">

@@ -86,6 +86,38 @@ describe('classifyQueueJoins', () => {
 });
 
 describe('buildQueueReport', () => {
+  it('splits joins by source and server, and clicks by kind and server', () => {
+    const now = at(24 * 60);
+    const report = buildQueueReport(
+      [
+        { ...ev('a', 'JOIN', 0), via: 'SITE' },
+        ev('a', 'MATCH', 1, 'QUEUE'),
+        { ...ev('b', 'JOIN', 2), via: 'JOIN_DM', guildId: 'g1' },
+        ev('b', 'LEAVE', 3),
+        { ...ev('b', 'JOIN', 4), via: 'JOIN_DM', guildId: 'g1' },
+        { ...ev('c', 'JOIN', 5), via: 'JOIN_DM', guildId: 'g2' },
+        ev('d', 'JOIN', 6), // before tracking
+      ],
+      new Date(0),
+      now,
+      [
+        { kind: 'TICKER_OFFER', outcome: 'MATCHED', guildId: 'g1', userId: 'x' },
+        { kind: 'TICKER_OFFER', outcome: 'GONE', guildId: 'g1', userId: 'x' },
+        { kind: 'TICKER_OFFER', outcome: 'SETUP_LINK', guildId: 'g1', userId: null },
+        { kind: 'JOIN_COMMAND', outcome: 'DM_SENT', guildId: 'g2', userId: 'y' },
+      ],
+      { g1: 'Under Empire' },
+    );
+    expect(report.sources[0]).toEqual({ via: 'JOIN_DM', guildId: 'g1', joins: 2, players: 1, matched: 0, left: 1, expired: 1, waiting: 0 });
+    expect(report.sources.find((s) => s.via === 'SITE')).toMatchObject({ joins: 1, matched: 1 });
+    expect(report.sources.find((s) => s.via === null)).toMatchObject({ guildId: null, joins: 1 });
+    expect(report.discordClicks).toEqual([
+      { kind: 'TICKER_OFFER', guildId: 'g1', clicks: 3, players: 1, outcomes: { MATCHED: 1, GONE: 1, SETUP_LINK: 1 } },
+      { kind: 'JOIN_COMMAND', guildId: 'g2', clicks: 1, players: 1, outcomes: { DM_SENT: 1 } },
+    ]);
+    expect(report.serverNames).toEqual({ g1: 'Under Empire' });
+  });
+
   it('fills every day of the window, newest first, with players who got no game', () => {
     const now = at(2 * 24 * 60); // Friday 18:00
     const windowStart = new Date('2026-10-27T23:00:00Z'); // Wednesday 00:00 site time

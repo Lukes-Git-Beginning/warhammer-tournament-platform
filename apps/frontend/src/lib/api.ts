@@ -1745,11 +1745,37 @@ export interface AdminQueueReport {
   timezone: string;
   /** Newest first. */
   daily: AdminQueueReportDay[];
+  sources: AdminQueueSourceRow[];
+  discordClicks: AdminDiscordClickRow[];
+  serverNames: Record<string, string>;
   medianWaitToMatchSec: number | null;
   medianWaitBeforeLeavingSec: number | null;
   joinsGrid: number[][];
   unmatchedGrid: number[][];
 }
+export type QueueJoinVia = 'SITE' | 'JOIN_DM' | 'DM_BUTTON';
+export type DiscordClickKind = 'JOIN_COMMAND' | 'PANEL_BUTTON' | 'TICKER_OFFER' | 'AVAILABILITY_OFFER';
+export type DiscordClickOutcome = 'DM_SENT' | 'ACTIVE_MATCH' | 'DMS_CLOSED' | 'SETUP_LINK' | 'MATCHED' | 'GONE' | 'BLOCKED' | 'FAILED';
+
+export interface AdminQueueSourceRow {
+  via: QueueJoinVia | null;
+  guildId: string | null;
+  joins: number;
+  players: number;
+  matched: number;
+  left: number;
+  expired: number;
+  waiting: number;
+}
+
+export interface AdminDiscordClickRow {
+  kind: DiscordClickKind;
+  guildId: string | null;
+  clicks: number;
+  players: number;
+  outcomes: Partial<Record<DiscordClickOutcome, number>>;
+}
+
 export function getAdminQueueReport(days: number): Promise<AdminQueueReport> {
   return apiFetch(`/api/admin/reports/queue?days=${days}`);
 }

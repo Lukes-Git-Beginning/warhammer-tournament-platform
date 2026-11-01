@@ -9,9 +9,12 @@
  *   - WAITING: joined less than that long ago, nothing yet.
  * Daily rows and weekday × hour grids in site time (Europe/Berlin).
  *
+ * Also where joins come from (site or Discord, and which server) and what clicks on Discord led to.
+ *
  * The builder is pure (events in, report out) so it is unit-testable; the loader does the queries.
  */
-import type { PrismaClient } from '@rizzotto/db';
+import type { DiscordClickKind, DiscordClickOutcome, PrismaClient, QueueJoinVia } from '@rizzotto/db';
+import { GUILDS_CONFIG_KEY } from './discord-open-play.js';
 import { emptyGrid, bump, siteCell, type Grid } from './admin-player-report.js';
 import { addSiteDays, SITE_TZ, siteDayKey } from './site-time.js';
 
@@ -36,6 +39,9 @@ export interface QueueReportEvent {
   at: Date;
   /** MATCH only: how the match came about. */
   source?: 'QUEUE' | 'AVAILABILITY' | 'CHALLENGE' | null;
+  /** JOIN only: where it came from (null: before this was tracked). */
+  via?: QueueJoinVia | null;
+  guildId?: string | null;
 }
 
 export interface QueueJoin {
@@ -46,6 +52,8 @@ export interface QueueJoin {
   viaDm: boolean;
   /** Time from join to match or leave; null when expired or still waiting. */
   waitMs: number | null;
+  via: QueueJoinVia | null;
+  guildId: string | null;
 }
 
 /** The outcome of every JOIN, walking each player's events in time order. */
@@ -65,6 +73,8 @@ export function classifyQueueJoins(events: QueueReportEvent[], now: Date): Queue
       outcome,
       viaDm: outcome === 'MATCHED' && end?.source === 'AVAILABILITY',
       waitMs: end && (outcome === 'MATCHED' || outcome === 'LEFT') ? Math.max(0, end.at.getTime() - join.at.getTime()) : null,
+      via: join.via ?? null,
+      guildId: join.guildId ?? null,
     });
 
   for (const list of byUser.values()) {
@@ -120,6 +130,35 @@ export interface QueueReportDay {
   playersWithoutGame: number;
 }
 
+/** Joins from one source: the site, or a kind of Discord button (with its server, when known). */
+export interface QueueSourceRow {
+  via: QueueJoinVia | null;
+  guildId: string | null;
+  joins: number;
+  players: number;
+  matched: number;
+  left: number;
+  expired: number;
+  waiting: number;
+}
+
+/** Clicks of one kind on one server (null: in a DM) and what they led to. */
+export interface DiscordClickRow {
+  kind: DiscordClickKind;
+  guildId: string | null;
+  clicks: number;
+  /** Players with an account who clicked. */
+  players: number;
+  outcomes: Partial<Record<DiscordClickOutcome, number>>;
+}
+
+export interface DiscordClickEvent {
+  kind: DiscordClickKind;
+  outcome: DiscordClickOutcome;
+  guildId: string | null;
+  userId: string | null;
+}
+
 export interface QueueReport {
   timezone: string;
   /** Newest first, every day of the window (all time: from the first join). */
@@ -132,6 +171,12 @@ export interface QueueReport {
   joinsGrid: Grid;
   /** Weekday × hour of the joins that ended without a match (left or expired). */
   unmatchedGrid: Grid;
+  /** Most joins first. */
+  sources: QueueSourceRow[];
+  /** Most clicks first. */
+  discordClicks: DiscordClickRow[];
+  /** Server id → the name in Admin → Settings → Discord Open Play. */
+  serverNames: Record<string, string>;
 }
 
 function medianSec(ms: number[]): number | null {
@@ -142,8 +187,47 @@ function medianSec(ms: number[]): number | null {
   return Math.round(m / 1000);
 }
 
+function buildSources(joins: QueueJoin[]): QueueSourceRow[] {
+  const rows = new Map<string, QueueSourceRow & { ids: Set<string> }>();
+  for (const j of joins) {
+    const key = `${j.via ?? ''}|${j.guildId ?? ''}`;
+    const row = rows.get(key) ?? { via: j.via, guildId: j.guildId, joins: 0, players: 0, matched: 0, left: 0, expired: 0, waiting: 0, ids: new Set<string>() };
+    rows.set(key, row);
+    row.joins++;
+    row.ids.add(j.userId);
+    if (j.outcome === 'MATCHED') row.matched++;
+    else if (j.outcome === 'LEFT') row.left++;
+    else if (j.outcome === 'EXPIRED') row.expired++;
+    else row.waiting++;
+  }
+  return [...rows.values()]
+    .map(({ ids, ...row }) => ({ ...row, players: ids.size }))
+    .sort((a, b) => b.joins - a.joins);
+}
+
+export function buildDiscordClicks(clicks: DiscordClickEvent[]): DiscordClickRow[] {
+  const rows = new Map<string, DiscordClickRow & { ids: Set<string> }>();
+  for (const c of clicks) {
+    const key = `${c.kind}|${c.guildId ?? ''}`;
+    const row = rows.get(key) ?? { kind: c.kind, guildId: c.guildId, clicks: 0, players: 0, outcomes: {}, ids: new Set<string>() };
+    rows.set(key, row);
+    row.clicks++;
+    row.outcomes[c.outcome] = (row.outcomes[c.outcome] ?? 0) + 1;
+    if (c.userId) row.ids.add(c.userId);
+  }
+  return [...rows.values()]
+    .map(({ ids, ...row }) => ({ ...row, players: ids.size }))
+    .sort((a, b) => b.clicks - a.clicks);
+}
+
 /** The report for the joins from `windowStart` on (earlier events only settle outcomes). */
-export function buildQueueReport(events: QueueReportEvent[], windowStart: Date, now: Date): QueueReport {
+export function buildQueueReport(
+  events: QueueReportEvent[],
+  windowStart: Date,
+  now: Date,
+  clicks: DiscordClickEvent[] = [],
+  serverNames: Record<string, string> = {},
+): QueueReport {
   const joins = classifyQueueJoins(events, now).filter((j) => j.at >= windowStart);
 
   const rows = new Map<string, QueueReportDay>();
@@ -206,6 +290,9 @@ export function buildQueueReport(events: QueueReportEvent[], windowStart: Date, 
     medianWaitBeforeLeavingSec: medianSec(joins.filter((j) => j.outcome === 'LEFT').map((j) => j.waitMs ?? 0)),
     joinsGrid,
     unmatchedGrid,
+    sources: buildSources(joins),
+    discordClicks: buildDiscordClicks(clicks),
+    serverNames,
   };
 }
 
@@ -217,7 +304,7 @@ export async function loadQueueReport(prisma: PrismaClient, days: number, now = 
       created_at: { gte: new Date(Math.max(0, windowStart.getTime() - JOIN_LOG_RACE_MS)) },
       event: { in: ['JOIN', 'LEAVE', 'MATCH'] },
     },
-    select: { user_id: true, event: true, match_id: true, created_at: true },
+    select: { user_id: true, event: true, match_id: true, created_at: true, via: true, guild_id: true },
     orderBy: { created_at: 'asc' },
   });
   const matchIds = [...new Set(logs.map((l) => l.match_id).filter((id): id is string => id !== null))];
@@ -226,6 +313,13 @@ export async function loadQueueReport(prisma: PrismaClient, days: number, now = 
       ? await prisma.match.findMany({ where: { id: { in: matchIds } }, select: { id: true, source: true } })
       : [];
   const sourceById = new Map(matches.map((m) => [m.id, m.source]));
+  const clicks = await prisma.discordClick.findMany({
+    where: { created_at: { gte: windowStart } },
+    select: { kind: true, outcome: true, guild_id: true, user_id: true },
+  });
+  const guildsRow = await prisma.adminConfig.findUnique({ where: { key: GUILDS_CONFIG_KEY } });
+  const guilds = Array.isArray(guildsRow?.value) ? (guildsRow.value as Array<{ guildId?: string; label?: string }>) : [];
+  const serverNames = Object.fromEntries(guilds.filter((g) => g.guildId && g.label).map((g) => [g.guildId, g.label]));
 
   return buildQueueReport(
     logs.map((l) => ({
@@ -233,8 +327,12 @@ export async function loadQueueReport(prisma: PrismaClient, days: number, now = 
       event: l.event as QueueReportEvent['event'],
       at: l.created_at,
       source: l.match_id ? (sourceById.get(l.match_id) ?? null) : undefined,
+      via: l.via,
+      guildId: l.guild_id,
     })),
     windowStart,
     now,
+    clicks.map((c) => ({ kind: c.kind, outcome: c.outcome, guildId: c.guild_id, userId: c.user_id })),
+    serverNames as Record<string, string>,
   );
 }
