@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.29.0] — 2026-11-01
+
+### Added
+- **Open Play on Discord.** Type `/join` on our Discord and RizzBOTto sends you your queue settings in a DM, the same as on the Open Play page. You join the queue from there.
+- **Play the whole match in your DMs.** When a 1v1 Open Play game is found, RizzBOTto sends you a match card: faction pick, lobby code, and the result with the replay upload. This also works for games you queued for on the site.
+- **Open requests in #open-play-ticker.** The channel shows who is looking for a game right now. Click a request to take that game without queuing yourself.
+
 ## [2.28.1] — 2026-10-31
 
 ### Fixed
