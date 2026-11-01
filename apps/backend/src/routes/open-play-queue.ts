@@ -40,7 +40,7 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
       if (!parsedPrefs.success) {
         return reply.code(400).send({ error: 'BadRequest', message: parsedPrefs.error.message, statusCode: 400 });
       }
-      const result = await joinOpenPlayQueue(fastify, request.user.sub, parsedPrefs.data);
+      const result = await joinOpenPlayQueue(fastify, request.user.sub, parsedPrefs.data, { via: 'SITE' });
       if (!result.ok) {
         return reply.code(result.statusCode).send({
           error: result.error,

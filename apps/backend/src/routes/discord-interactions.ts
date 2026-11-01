@@ -6,6 +6,7 @@ import { decodeOffer } from '../lib/queue-matching.js';
 import { claimQueueOffer } from '../lib/queue-offer.js';
 import { resolveCompetitors } from '../lib/competitors.js';
 import { joinOpenPlayQueue } from '../lib/open-play-queue-service.js';
+import { logDiscordClick } from '../lib/queue-activity.js';
 import { handleOpenPlayInteraction, type Interaction } from '../lib/discord-open-play-interactions.js';
 
 const PING = 1;
@@ -62,7 +63,7 @@ async function joinQueueViaDiscord(
   fastify: FastifyInstance,
   userId: string,
 ): Promise<ReturnType<typeof ephemeral>> {
-  const result = await joinOpenPlayQueue(fastify, userId, {});
+  const result = await joinOpenPlayQueue(fastify, userId, {}, { via: 'DM_BUTTON' });
   if (!result.ok) return ephemeral(result.code === 'QUEUED' ? "You're already in the queue." : result.message);
   if (result.matched) {
     const match = await fastify.prisma.match.findUnique({ where: { id: result.matchId }, select: { player1_id: true, player2_id: true } });
@@ -233,6 +234,12 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
             });
             if (!user) { await patchDeferred('You need to log in at rizzotto.gg first.'); return; }
             const result = await claimQueueOffer(fastify, user.id, offer);
+            await logDiscordClick(fastify.prisma, {
+              kind: 'AVAILABILITY_OFFER',
+              outcome: result.status === 'matched' ? 'MATCHED' : result.status === 'blocked' ? 'BLOCKED' : 'GONE',
+              userId: user.id,
+              matchId: result.status === 'matched' ? result.matchId : null,
+            });
             if (result.status === 'matched') {
               const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${result.matchId}`;
               await patchDeferred(`Match found! vs **${result.opponentName}** → ${matchUrl}`);

@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getAdminConfig, postDiscordJoinPanel, putAdminConfig, putDiscordOpenPlayRollout, type DiscordOpenPlayRollout } from '@/lib/api.js';
+import {
+  getAdminConfig,
+  postDiscordJoinPanel,
+  postDiscordPreviewCard,
+  putAdminConfig,
+  putDiscordOpenPlayRollout,
+  type DiscordOpenPlayRollout,
+} from '@/lib/api.js';
 import { Button } from '@/components/ui/button';
 
 const CONFIG_KEY = 'discord_open_play_guilds';
@@ -86,6 +93,12 @@ export function DiscordOpenPlayPanel() {
     onError: (err: Error) => setStatus(err.message),
   });
 
+  const preview = useMutation({
+    mutationFn: () => postDiscordPreviewCard(),
+    onSuccess: () => setStatus('Preview card sent. Check your Discord DMs.'),
+    onError: (err: Error) => setStatus(err.message),
+  });
+
   const setField = (i: number, field: keyof OpenPlayGuild, value: string) =>
     setGuilds((list) => list.map((g, j) => (j === i ? { ...g, [field]: value } : g)));
 
@@ -125,9 +138,20 @@ export function DiscordOpenPlayPanel() {
           Tester Discord ids (one per line)
           <textarea className={input} rows={3} value={testers} onChange={(e) => setTesters(e.target.value)} />
         </label>
-        <Button variant="forge" size="sm" className="mt-2" disabled={!testersValid || rollout.isPending} onClick={() => rollout.mutate()}>
-          Save status
-        </Button>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button variant="forge" size="sm" disabled={!testersValid || rollout.isPending} onClick={() => rollout.mutate()}>
+            Save status
+          </Button>
+          <Button
+            variant="etched"
+            size="sm"
+            disabled={preview.isPending}
+            title="RizzBOTto DMs you a match card against himself: click through faction pick, lobby code and the result with a replay upload. No real match."
+            onClick={() => preview.mutate()}
+          >
+            Send me a preview card
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (

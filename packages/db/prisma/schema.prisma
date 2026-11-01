@@ -240,6 +240,31 @@ enum QueueEventType {
   TIMEOUT // #14 queue-abuse escalation level >= 2 — cooldown applied
 }
 
+// How a queue JOIN came in (null on rows from before this was tracked).
+enum QueueJoinVia {
+  SITE // the queue button on the site
+  JOIN_DM // the join DM from /join or the panel's button
+  DM_BUTTON // a one-click button in a DM with the stored settings (Queue Again, opt-in)
+}
+
+enum DiscordClickKind {
+  JOIN_COMMAND // typed /join
+  PANEL_BUTTON // "Find a game" on the pinned panel
+  TICKER_OFFER // an open request in the ticker channel
+  AVAILABILITY_OFFER // an offer in an availability DM
+}
+
+enum DiscordClickOutcome {
+  DM_SENT // the join DM went out
+  ACTIVE_MATCH // he has a match going, so he got his match card instead
+  DMS_CLOSED // his privacy settings block the DM
+  SETUP_LINK // no account or no Steam link yet: got the setup link
+  MATCHED // took the offer, the match was created
+  GONE // someone else was faster
+  BLOCKED // not allowed right now (cooldown, active match, already queued, ...)
+  FAILED
+}
+
 enum AvailabilityContext {
   TOURNAMENT
   MATCHMAKING
@@ -343,6 +368,7 @@ model User {
   accepted_matchups       ScheduledMatchup[]      @relation("MatchupAcceptor")
   queue_activity          QueueActivityLog[]      @relation("QueueActivityUser")
   queue_activity_opponent QueueActivityLog[]      @relation("QueueActivityOpponent")
+  discord_clicks          DiscordClick[]
   access_events           AccessEvent[]
 
   @@index([role])
@@ -1278,6 +1304,8 @@ model QueueActivityLog {
   match_id    String?        @db.Uuid // set for MATCH/CANCEL/WIN/LOSE/DRAW
   opponent_id String?        @db.Uuid // the other player, when known
   level       Int? // #14 escalation level for WARNING/TIMEOUT events
+  via         QueueJoinVia? // JOIN only: where the join came from
+  guild_id    String? // JOIN only: the Discord server behind a join DM, when known
   created_at  DateTime       @default(now())
 
   user     User  @relation("QueueActivityUser", fields: [user_id], references: [id])
@@ -1285,6 +1313,22 @@ model QueueActivityLog {
 
   @@index([user_id])
   @@index([event])
+  @@index([created_at])
+}
+
+// One click on a way into Open Play on Discord and what it led to (admin queue report). Taking an
+// offer never joins the queue, so these clicks have no JOIN in the log above.
+model DiscordClick {
+  id         String              @id @default(uuid()) @db.Uuid
+  kind       DiscordClickKind
+  outcome    DiscordClickOutcome
+  guild_id   String? // null in a DM
+  user_id    String?             @db.Uuid // null: no account yet
+  match_id   String?             @db.Uuid // set for MATCHED
+  created_at DateTime            @default(now())
+
+  user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
   @@index([created_at])
 }
 

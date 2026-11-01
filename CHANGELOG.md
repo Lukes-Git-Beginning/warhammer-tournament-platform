@@ -5,12 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
-## [3.0.0] — 2026-10-27
+## [3.0.0] — 2026-11-02
 
 ### Added
 - **RizzOtto's Arena Mod.** Every game on the Arena now runs with one mod. It adds the arena modes to the custom battle lobby (Domquest, Land Battle, Conquest, Domination, Siege Battle and Free-For-All Battle) with their maps, lobby settings and bans, and enforces the Fruit Rules in Land Battle, Conquest and Siege. You no longer need the Total Tavern map pack or Loupi's Fruit Rules mod, so disable both. Get it on the Steam Workshop; the new How to Play page walks you through it.
 - **Domquest, our own battle type.** Think Conquest on the Domination engine: a Conquest-sized starting army, a small reinforcing army that works like a sideboard, and one capture point in the middle. It has its own skill rating, leaderboards, quarterly final, Open Play queue and Standard Ruleset. Your start there comes from your Domination rating, or from Conquest if you have played more Conquest.
-- **How to Play.** A new page in the header: installing the mod, everything that's in it, how Domquest works, the rules you still follow yourself and how a match on the site works.
+- **How to Play.** A new page in the header: installing the mod, everything that's in it, how Domquest works, the rules you still follow yourself, how a match on the site works and how to play Open Play on Discord.
 - **The Fruit Rules page.** Also in the header now: how we read the Fruit Rules v10, and every limit per faction for planning your armies.
 - **Open Play's code of conduct.** The Open Play page and How to Play now spell out what gets you a strike (leaving the queue right after joining, not picking your faction in time), what each strike does and how strikes fade.
 
@@ -18,13 +18,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 - **Siege has the Fruit Rules too**, enforced by the mod.
 - **The rule cards show only what you watch yourself:** hosting in the arena mode with the mod, and the conduct rules. The mod takes care of the settings and the bans. Open Play shows the rules of your battle types in one box: what they share once, then what each one adds.
 - **Round limits and disqualification are for tournaments only.** Open Play no longer lists them. In Open Play, cheating voids the result, and an admin can ban you from Open Play.
-- **Logging in with Discord adds you to our Discord server**, so match notifications can reach you. Discord asks you once, the next time you log in.
 - **New players get a welcome page** after their first login, with our Discord server and the mod.
 - **A weekly reminder to join our Discord server.** If you've linked Steam but aren't on the RizzOttoverse, the site asks you once a week to join. Match notifications come as DMs from our bot, and Discord only lets it message players who share a server with it. Players on a partner server that has our bot aren't asked.
 - **If you had every battle type selected** for Open Play or for tournament DMs, Domquest is now included too. A narrower selection stays as you set it.
 
 ### Fixed
 - **The DM after a missed faction pick** now says that, instead of telling you that you kept leaving the queue. The queue's cooldown message doesn't blame leaving any more either, and the longest cooldown says that an admin has to lift it.
+
+## [2.30.1] — 2026-11-01
+
+### Changed
+- **Game lists say what they show.** The All Games list on the Meta page now names the version, battle type and team size it is filtered to, so a game of another type no longer looks missing. The All Games list for admins now shows each game's battle type.
+
+## [2.30.0] — 2026-11-01
+
+### Added
+- **Where Open Play joins come from.** The Open Play queue report for admins now shows whether a join came from the site or from Discord, and from which server. It also counts the clicks on `/join`, the panel, ticker requests and availability DM offers, and what they led to.
+
+## [2.29.0] — 2026-11-01
+
+### Added
+- **Open Play on Discord.** Type `/join` on our Discord and RizzBOTto sends you your queue settings in a DM, the same as on the Open Play page. You join the queue from there.
+- **Play the whole match in your DMs.** When a 1v1 Open Play game is found, RizzBOTto sends you a match card: faction pick, lobby code, and the result with the replay upload. This also works for games you queued for on the site.
+- **Open requests in #open-play-ticker.** The channel shows who is looking for a game right now. Click a request to take that game without queuing yourself.
 
 ## [2.28.1] — 2026-10-31
 

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { getMetaGames, getGameAudit, getFactions, getMaps, editGame, deleteGame, type GameSearchFilters } from '@/lib/api';
 import type { GameAuditIssue } from '@/lib/api';
-import type { GameHistoryEntry } from '@rizzotto/types';
+import { BATTLE_TYPE_LABELS, type GameHistoryEntry } from '@rizzotto/types';
 
 const ISSUE_LABELS: Record<GameAuditIssue, string> = {
   draw: 'Draw',
@@ -141,7 +141,7 @@ export function AdminAllGamesTab() {
   const total = flaggedOnly ? (auditData?.total ?? 0) : (data?.total ?? 0);
   const isLoading = flaggedOnly ? auditLoading : allLoading;
   const totalPages = flaggedOnly ? 1 : Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const colSpan = flaggedOnly ? 14 : 13;
+  const colSpan = flaggedOnly ? 15 : 14;
 
   const save = (game: GameHistoryEntry, body: EditBody) => mutation.mutate({ game, body });
 
@@ -241,6 +241,7 @@ export function AdminAllGamesTab() {
                 <th className="px-3 py-2 font-medium text-stone-400">Date</th>
                 <th className="px-3 py-2 font-medium text-stone-400">Tournament</th>
                 <th className="px-3 py-2 font-medium text-stone-400">R·G</th>
+                <th className="px-3 py-2 font-medium text-stone-400">Type</th>
                 <th className="px-3 py-2 font-medium text-stone-400">Player 1</th>
                 <th className="px-3 py-2 font-medium text-stone-400">Faction</th>
                 <th className="px-3 py-2 font-medium text-stone-400">Player 2</th>
@@ -287,6 +288,9 @@ export function AdminAllGamesTab() {
                         )}
                       </td>
                       <td className="px-3 py-2 text-stone-400 text-xs whitespace-nowrap">R{g.round}·G{g.gameNumber}</td>
+                      <td className="px-3 py-2 text-stone-400 text-xs whitespace-nowrap">
+                        {g.battleType ? BATTLE_TYPE_LABELS[g.battleType] : '—'}
+                      </td>
                       <td className="px-3 py-2 text-stone-300 text-xs whitespace-nowrap">{g.player1?.username ?? '—'}</td>
                       <td className="px-3 py-2">
                         <select
