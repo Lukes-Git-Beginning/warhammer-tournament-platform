@@ -644,6 +644,8 @@ export function MatchDetailPage() {
               maps={maps}
               factions={factions}
               isOpenPlay={isOpenPlay}
+              cancelledBy={gamesData.cancelledBy}
+              lateReportUntil={gamesData.lateReportUntil && (mySideId ?? user?.id) !== gamesData.cancelledSlot ? gamesData.lateReportUntil : null}
             />
           ))}
         </div>
@@ -651,13 +653,16 @@ export function MatchDetailPage() {
 
       {isOpenPlay && (isPlayer1 || isPlayer2) && (match.status === 'ONGOING' || match.status === 'AWAITING_CONFIRMATION') && (
         <div className="flex flex-col items-center gap-2 py-4 mb-4 border border-red-900/50 rounded-lg bg-red-950/20">
-          <p className="text-xs text-stone-500">Can't play? Cancelling counts as a draw for both players.</p>
+          <p className="text-xs text-stone-500 text-center">
+            Can't play? A game with a reported result keeps it; the rest is dropped. If the battle was played, your
+            opponent can still report it.
+          </p>
           <Button
             variant="ghost"
             size="sm"
             className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
             onClick={() => {
-              if (confirm('Cancel this match? It will count as a draw for both players.')) {
+              if (confirm('Cancel this match? If the battle was played, your opponent can still report it, and cancelling a lost game can get you banned.')) {
                 cancelOpenPlay.mutate();
               }
             }}
@@ -671,7 +676,14 @@ export function MatchDetailPage() {
       {isOpenPlay && (isPlayer1 || isPlayer2) && (match.status === 'COMPLETED' || match.status === 'CANCELLED') && (
         <div className="flex flex-col items-center gap-2 py-4 mb-4 border border-rizzotto-iron-600 rounded-lg bg-rizzotto-iron-900/50">
           <p className="text-sm text-rizzotto-stone-400">
-            {match.status === 'CANCELLED' ? 'Match cancelled.' : 'Match complete.'} Ready for another?
+            {match.status === 'CANCELLED'
+              ? gamesData?.cancelledSlot && gamesData.cancelledSlot === (mySideId ?? user?.id)
+                ? 'You cancelled this match.'
+                : gamesData?.cancelledBy
+                  ? `${gamesData.cancelledBy} cancelled this match.`
+                  : 'Match cancelled.'
+              : 'Match complete.'}{' '}
+            Ready for another?
           </p>
           {queueAgain.data?.matched === false ? (
             <p className="text-sm text-rizzotto-gold-400">You're in the queue — you'll get a DM when a match is found.</p>

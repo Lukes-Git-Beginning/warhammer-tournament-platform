@@ -144,7 +144,7 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
 
   // POST /api/open-play/matches/:id/cancel — either player can cancel.
   // A game with a reported result is statistically real and is finalized to that
-  // result; only games without a reported result are recorded as draws.
+  // result; a game without one is dropped, and the other side can still report it for a while.
   fastify.post(
     '/api/open-play/matches/:id/cancel',
     { preHandler: fastify.authenticate },
@@ -166,7 +166,17 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not your match', statusCode: 403 });
       }
 
-      await cancelOpenPlayMatch(fastify, match);
+      // The side the cancelling player belongs to (his team for 2v2). Staff cancelling someone
+      // else's match leaves it empty: nobody on the match chose to walk away.
+      const slot = !isPlayer
+        ? null
+        : match.competitor_format === 'TWO_V_TWO'
+          ? ((await fastify.prisma.teamMember.findFirst({
+              where: { user_id: userId, team_id: { in: [match.player1_id, match.player2_id].filter((x): x is string => !!x) } },
+              select: { team_id: true },
+            }))?.team_id ?? null)
+          : userId;
+      await cancelOpenPlayMatch(fastify, match, slot ? { userId, slot } : undefined);
 
       return reply.code(200).send({ ok: true });
     },

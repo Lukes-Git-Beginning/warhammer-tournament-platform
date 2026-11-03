@@ -25,6 +25,7 @@ import {
   syncTicker,
   type DiscordMessage,
 } from './discord-open-play.js';
+import { decideCancelAlert } from './open-play-cancel-notify.js';
 import { joinOpenPlayQueue, leaveOpenPlayQueue } from './open-play-queue-service.js';
 import { claimQueueOffer } from './queue-offer.js';
 import { logDiscordClick } from './queue-activity.js';
@@ -320,7 +321,7 @@ async function handleMatchCard(fastify: FastifyInstance, i: Interaction, userId:
     case 'mc_esc':
       return act('POST', `${base}/escalate`);
     case 'mc_cancel':
-      return ephemeral('Cancel this match? A game that already has a reported result keeps it; the rest is dropped.', [
+      return ephemeral("Cancel this match? A game that already has a reported result keeps it; the rest is dropped. If the battle was played, your opponent can still report it, and cancelling a lost game can get you banned.", [
         { type: 1, components: [{ type: 2, style: 4, label: 'Yes, cancel the match', custom_id: `mc_cancelyes:${matchId}` }] },
       ]);
     case 'mc_cancelyes':
@@ -376,6 +377,26 @@ async function handleModal(fastify: FastifyInstance, i: Interaction, userId: str
     });
   }
   return null;
+}
+
+/** The admins' decision on a player who cancelled a lost match: ban him, or let it go. */
+async function handleCancelAlert(fastify: FastifyInstance, i: Interaction, discordId: string, action: string, parts: string[]) {
+  const admin = await fastify.prisma.user.findFirst({
+    where: { discord_id: discordId, role: 'ADMIN', deleted_at: null },
+    select: { id: true, username: true },
+  });
+  if (!admin) return ephemeral('Only admins can decide this.');
+  const [matchId] = parts;
+  if (!matchId) return ephemeral('Invalid button.');
+  if (action === 'ca_ban') {
+    return ephemeral('Ban this player? He can\'t log in or play until an admin lifts the ban under Admin → Users, and the bot tells him why and how to reach you.', [
+      { type: 1, components: [{ type: 2, style: 4, label: 'Yes, ban him', custom_id: `ca_banyes:${matchId}` }] },
+    ]);
+  }
+  return deferred(fastify, { type: DEFERRED_UPDATE }, async () => {
+    const outcome = await decideCancelAlert(fastify, matchId, admin, action === 'ca_banyes' ? 'ban' : 'none');
+    if (action === 'ca_banyes') await editOriginal(i, { content: outcome, components: [] });
+  });
 }
 
 /** The preview card: the same steps as a real card, with RizzBOTto on the other side and no match. */
@@ -449,6 +470,7 @@ export async function handleOpenPlayInteraction(fastify: FastifyInstance, i: Int
       if (!(await areOpenPlayTesters(fastify, [discordId]))) return notOpenYet();
       return action === 'jp_find' ? startJoin(fastify, i, discordId, 'PANEL_BUTTON') : handleTicker(fastify, i, discordId, parts);
     }
+    if (action.startsWith('ca_')) return handleCancelAlert(fastify, i, discordId, action, parts);
     if (!action.startsWith('oq_') && !action.startsWith('mc_') && !action.startsWith('pv_')) return null;
   } else if (i.type !== MODAL_SUBMIT) {
     return null;

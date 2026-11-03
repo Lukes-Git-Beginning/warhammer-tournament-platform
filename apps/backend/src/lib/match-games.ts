@@ -2,6 +2,7 @@ import { randomInt } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@rizzotto/db';
 import { completeMatch } from './complete-match.js';
+import { alertCancelAfterLoss } from './open-play-cancel-notify.js';
 import { recomputeFactionStats } from './recompute-faction-stats.js';
 import { invalidate } from './cache.js';
 
@@ -150,6 +151,8 @@ export async function finalizeGameResult(
       },
       match: {
         select: {
+          status: true,
+          cancelled_slot: true,
           player1_id: true,
           player2_id: true,
           player1_faction_id: true,
@@ -340,6 +343,12 @@ export async function finalizeGameResult(
     });
   }
 
+  // A result on a match a player cancelled, and he lost it: the admins decide what happens to him.
+  const wasCancelled = game.match.status === 'CANCELLED';
+  if (wasCancelled && game.match.cancelled_slot && game.reported_winner_id !== game.match.cancelled_slot) {
+    setImmediate(() => void alertCancelAfterLoss(fastify, game.match_id, game.id));
+  }
+
   // Series completion: count wins and decide whether to continue or complete
   let format: 'BO1' | 'BO2' | 'BO3' | 'BO5';
   if (game.match.tournament) {
@@ -387,8 +396,8 @@ export async function finalizeGameResult(
       actorId: matchWinner ?? game.reported_winner_id ?? game.match.player1_id!,
       skipStats: true, // stats already written per-game above
     });
-  } else {
-    // Series continues — create next game row
+  } else if (!wasCancelled) {
+    // Series continues — create next game row (a cancelled series doesn't: its games count as they are)
     const nextGameNumber = game.game_number + 1;
     const nextGameId = await ensureMatchGame(fastify.prisma, game.match_id, nextGameNumber, game.match.tournament?.counts_for_leaderboard ?? true);
 
@@ -451,11 +460,14 @@ export async function autoConfirmExpiredGameResults(fastify: FastifyInstance): P
       confirmed_at: null,
       status: { notIn: ['COMPLETED', 'DISPUTED'] },
     },
-    select: { id: true },
+    select: { id: true, verification: true, match: { select: { status: true } } },
   });
 
   let confirmed = 0;
   for (const game of expired) {
+    // A late report whose replay doesn't match never counts by waiting: it would flag the other
+    // player to the admins on no evidence. The reporter fixes it, explains it, or an admin decides.
+    if (game.match.status === 'CANCELLED' && game.verification) continue;
     try {
       await finalizeGameResult(fastify, game.id);
       confirmed++;

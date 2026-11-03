@@ -2846,8 +2846,19 @@ export interface GameDto {
   pickedFactions?: { player1FactionId: string | null; player2FactionId: string | null } | null;
 }
 
-export function getMatchGames(matchId: string): Promise<{ games: GameDto[]; player1Id: string | null; player2Id: string | null; withdrawnPlayerId: string | null }> {
-  return apiFetch<{ games: GameDto[]; player1Id: string | null; player2Id: string | null; withdrawnPlayerId: string | null }>(`/api/matches/${matchId}/games`);
+export interface MatchGamesDto {
+  games: GameDto[];
+  player1Id: string | null;
+  player2Id: string | null;
+  withdrawnPlayerId: string | null;
+  /** The player who cancelled this match, the side he plays for, and until when the other side can still report. */
+  cancelledBy: string | null;
+  cancelledSlot: string | null;
+  lateReportUntil: string | null;
+}
+
+export function getMatchGames(matchId: string): Promise<MatchGamesDto> {
+  return apiFetch<MatchGamesDto>(`/api/matches/${matchId}/games`);
 }
 
 /**
@@ -3361,6 +3372,7 @@ export interface GameSearchFilters {
   competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO'; // team-size filter (meta tab)
   versionId?: string;  // version filter (meta tab)
   battleType?: BattleType; // battle-type filter (meta tab)
+  cancelled?: '1';     // staff: cancelled Open Play games that got to the battle
 }
 
 export function getMetaGames(

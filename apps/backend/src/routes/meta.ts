@@ -9,6 +9,7 @@ import { getMatchupMatrix } from '../lib/heatmap.js';
 import { resolveStandardRuleset, resolveAllStandardRulesets } from '../lib/standard-ruleset.js';
 import { resolveRuleDocuments } from '../lib/rule-documents.js';
 import { resolveCompetitors } from '../lib/competitors.js';
+import { canManageTournament } from '../lib/tournament-utils.js';
 import { computeDuoMeta } from '../lib/duo-meta.js';
 
 // ---------------------------------------------------------------------------
@@ -311,6 +312,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       map: z.string().trim().optional(),          // picked map name
       faction: z.string().trim().optional(),      // either faction slug
       tournament: z.string().trim().optional(),   // tournament name, or "ladder"/"open"/"queue" for Open Play
+      cancelled: z.literal('1').optional(),       // staff: cancelled Open Play games that got to the battle
     }).safeParse(request.query);
 
     if (!parsed.success) {
@@ -321,6 +323,14 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     const { versionId: gamesVersionId, battleType: gamesBattleType } = parsed.data;
     const { q, winner, map: mapQ, faction: factionQ, tournament: tournamentQ } = parsed.data;
     const { result, ownFactionId, oppFactionId, source } = parsed.data;
+    const cancelledOnly = parsed.data.cancelled === '1';
+    if (cancelledOnly) {
+      await fastify.authenticate(request, reply);
+      if (reply.sent) return reply;
+      if (!(await canManageTournament(fastify.prisma, '', request.user.sub, request.user.role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Staff only', statusCode: 403 });
+      }
+    }
     const skip = (page - 1) * limit;
     const ci = (contains: string) => ({ contains, mode: 'insensitive' as const });
 
@@ -417,7 +427,11 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     // excluded. The match's lifecycle status is intentionally not filtered — a real game
     // stays listed even if its container was later cancelled.
     const gameWhere = {
-      status: 'COMPLETED' as const,
+      // Cancelled view: games without a result on a cancelled match, where both factions were revealed
+      // (the rest never got to a battle). PENDING = a late report still held for its replay.
+      ...(cancelledOnly
+        ? { status: { in: ['CANCELLED', 'PENDING'] as ('CANCELLED' | 'PENDING')[] }, blind_pick: { revealed_at: { not: null } } }
+        : { status: 'COMPLETED' as const }),
       // gameFactionFilter (meta-tab) + player-relative result/own/opp-faction filters (profile).
       ...(gameAnd.length ? { AND: gameAnd } : {}),
       // battleType — meta-tab battle-type selector (per-game column).
@@ -432,6 +446,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
         player1_id: { not: null },
         player2_id: { not: null },
         counts_for_leaderboard: true,
+        ...(cancelledOnly ? { status: 'CANCELLED' as const } : {}),
         // versionId — meta-tab version selector; 'all' = All-Time (no version filter).
         ...(gamesVersionId && gamesVersionId !== 'all' ? { version_id: gamesVersionId } : {}),
         ...(tournamentSlug ? { tournament: { slug: tournamentSlug, deleted_at: null } } : { deleted_at: null }),
@@ -463,12 +478,16 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
           replay_url: true,
           counts_for_leaderboard: true,
           map_decision: { select: { picked_map_id: true } },
+          blind_pick: { select: { player1_faction_id: true, player2_faction_id: true } },
           match: {
             select: {
               id: true,
               round: true,
               match_number: true,
               played_at: true,
+              updated_at: true,
+              cancelled_at: true,
+              cancelled_by_id: true,
               source: true,
               player1_id: true,
               player2_id: true,
@@ -476,7 +495,8 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
             },
           },
         },
-        orderBy: { played_at: 'desc' },
+        // A cancelled game has no played_at (Postgres would sort those first anyway).
+        orderBy: cancelledOnly ? { match: { updated_at: 'desc' } } : { played_at: 'desc' },
         skip,
         take: limit,
       }),
@@ -493,6 +513,14 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       return c ? { id: c.id, username: c.username, avatar_url: c.avatar_url, type: c.type } : null;
     };
 
+    const cancellers = cancelledOnly
+      ? await fastify.prisma.user.findMany({
+          where: { id: { in: games.map((g) => g.match.cancelled_by_id).filter((x): x is string => !!x) } },
+          select: { id: true, username: true },
+        })
+      : [];
+    const cancellerName = new Map(cancellers.map((u) => [u.id, u.username]));
+
     const rows = games.map((g) => ({
       round: g.match.round,
       matchNumber: g.match.match_number,
@@ -503,10 +531,12 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       matchId: g.match.id,
       id: g.id,
       gameNumber: g.game_number,
-      playedAt: (g.played_at ?? g.match.played_at)?.toISOString() ?? null,
+      playedAt: (g.played_at ?? g.match.played_at ?? (cancelledOnly ? (g.match.cancelled_at ?? g.match.updated_at) : null))?.toISOString() ?? null,
       winnerId: g.winner_id,
-      player1FactionId: g.player1_faction_id,
-      player2FactionId: g.player2_faction_id,
+      // Factions land on the game when it is finalized; until then they are in the revealed pick.
+      player1FactionId: g.player1_faction_id ?? (cancelledOnly ? (g.blind_pick?.player1_faction_id ?? null) : null),
+      player2FactionId: g.player2_faction_id ?? (cancelledOnly ? (g.blind_pick?.player2_faction_id ?? null) : null),
+      ...(cancelledOnly ? { cancelledBy: g.match.cancelled_by_id ? (cancellerName.get(g.match.cancelled_by_id) ?? null) : null } : {}),
       player1FactionId2: g.player1_faction_id_2,
       player2FactionId2: g.player2_faction_id_2,
       battleType: g.battle_type,

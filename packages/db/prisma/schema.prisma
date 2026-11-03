@@ -743,6 +743,12 @@ model Match {
   // Withdraw→Void: the player who dropped, flagging the survivor's still-open match
   // as "opponent withdrew — decide played vs void". Null in the normal case.
   withdrawn_player_id    String?          @db.Uuid
+  // Open Play: when the match was cancelled, by which user and for which side (the competitor slot).
+  // By and slot stay null when no player did it (no-show timeout, staff). A set slot lets the other
+  // side still report the battle for a while (lib/cancel-open-play-match.ts).
+  cancelled_at           DateTime?
+  cancelled_by_id        String?          @db.Uuid
+  cancelled_slot         String?          @db.Uuid
   // Dynamic weighted leaderboard (derive-on-read): authoritative version tag +
   // play time, stamped when the match is completed. version_id is nullable so it
   // is only set for finished matches (backfilled for historical rows).

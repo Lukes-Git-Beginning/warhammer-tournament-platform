@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.31.0] — 2026-11-03
+
+### Changed
+- **Cancelling an Open Play match can't erase a lost game anymore.** After a player cancels a match that got as far as the battle, his opponent gets a DM and can still report the result with the replay for two hours. It then counts as normal.
+- **Cancelling after a loss goes to the admins.** When a report shows that the player who cancelled lost the battle, every admin gets a DM and decides whether to ban him. A banned player gets a DM with the reason and how to reach the admin team.
+- **Cancelled stays on record as a match outcome.** The match page says who cancelled, and admins find these games under Admin, All Games, Cancelled, where picking a winner adds the result.
+
+### Fixed
+- The match page said that cancelling counts as a draw for both players. It doesn't: a game without a reported result is dropped.
+
 ## [2.30.1] — 2026-11-01
 
 ### Changed

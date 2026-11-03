@@ -12,6 +12,7 @@ declare module '@tanstack/react-router' {
   }
 }
 import { reportGameResult, startMatchDecision, voidDroppedMatch, assertReplayCorrect, type ReplayIssue } from '@/lib/api';
+import { formatSiteDateTime } from '@/lib/site-time';
 import type { GameDto, MapDto } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { InfoTooltip } from '@/components/ui/InfoTooltip';
@@ -91,6 +92,10 @@ interface Props {
   withdrawnPlayerId?: string | null;
   /** True for a playoff-bracket match — a withdrawal there is a walkover (survivor advances). */
   isPlayoffMatch?: boolean;
+  /** Who cancelled this match, when a player did. */
+  cancelledBy?: string | null;
+  /** Set when the viewer's side can still report this cancelled game, until this time. */
+  lateReportUntil?: string | null;
 }
 
 export function GameTile({
@@ -116,6 +121,8 @@ export function GameTile({
   isOpenPlay,
   withdrawnPlayerId,
   isPlayoffMatch,
+  cancelledBy,
+  lateReportUntil,
 }: Props) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -204,6 +211,8 @@ export function GameTile({
   const isPlayer1 = viewerSideId === player1Id;
   const isPlayer2 = viewerSideId === player2Id;
   const canAct = canInteract ?? isParticipant;
+  // The opponent cancelled after the factions were revealed: this game can still be reported.
+  const lateReportOpen = !!lateReportUntil && game.status === 'CANCELLED' && !!game.blindPick?.revealedAt && canAct;
   const isReadOnlyMember = isParticipant && !canAct;
 
   // Banner visibility: show when the current user is the survivor (a participant whose
@@ -438,8 +447,31 @@ export function GameTile({
         </div>
       )}
 
+      {/* CANCELLED: the outcome stays on record */}
+      {game.status === 'CANCELLED' && !lateReportOpen && (
+        <div className="flex flex-col gap-3">
+          {(p1Faction || p2Faction) && (
+            <div className="flex items-start justify-center gap-6">
+              <PlayerInfo name={leftName} avatarUrl={leftAvatarUrl} faction={leftFaction} faction2={leftFaction2} />
+              <span className="self-center text-xs uppercase tracking-wider text-rizzotto-stone-500">vs</span>
+              <PlayerInfo name={rightName} avatarUrl={rightAvatarUrl} faction={rightFaction} faction2={rightFaction2} />
+            </div>
+          )}
+          <p className="text-sm text-rizzotto-stone-400 text-center">
+            {cancelledBy ? `${cancelledBy} cancelled this match.` : 'This match was cancelled.'} No result was reported for this game.
+          </p>
+        </div>
+      )}
+
+      {lateReportOpen && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+          {cancelledBy ?? 'Your opponent'} cancelled this match. If you played the battle, report the result with the replay
+          by {formatSiteDateTime(lateReportUntil!)}. It then counts as normal.
+        </div>
+      )}
+
       {/* PENDING / ONGOING */}
-      {(game.status === 'PENDING' || game.status === 'ONGOING') && (
+      {(game.status === 'PENDING' || game.status === 'ONGOING' || lateReportOpen) && (
         <>
           {/* Players + factions — shown from the moment the tile appears when the
               factions are already known and not blind (SFT, 2D3). For 2D3 this
@@ -572,13 +604,15 @@ export function GameTile({
               </div>
 
               {/* Lobby code + password */}
-              <LobbyCodeField
-                matchId={matchId}
-                gameNumber={game.gameNumber}
-                currentCode={game.lobbyCode}
-                currentPassword={game.lobbyPassword}
-                canEdit={canAct}
-              />
+              {!lateReportOpen && (
+                <LobbyCodeField
+                  matchId={matchId}
+                  gameNumber={game.gameNumber}
+                  currentCode={game.lobbyCode}
+                  currentPassword={game.lobbyPassword}
+                  canEdit={canAct}
+                />
+              )}
 
               {/* Result reporting — only for the acting competitor (1v1 self / 2v2 captain). Keep
                   it open while the mismatch prompt is showing (paths A/B/C): the report sets
@@ -831,6 +865,7 @@ function StatusBadge({ status }: { status: string }) {
     ONGOING: 'text-blue-400 border-blue-800',
     COMPLETED: 'text-rizzotto-gold-400 border-rizzotto-gold-800',
     DISPUTED: 'text-yellow-400 border-yellow-800',
+    CANCELLED: 'text-red-400 border-red-900',
   };
   return (
     <span className={`text-xs border rounded px-1.5 py-0.5 ${colors[status] ?? colors['PENDING']}`}>

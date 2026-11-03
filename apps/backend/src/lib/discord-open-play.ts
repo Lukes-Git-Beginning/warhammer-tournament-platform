@@ -11,6 +11,7 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { BATTLE_TYPE_LABELS } from '@rizzotto/types';
+import { isLateReportOpen, lateReportDeadline } from './cancel-open-play-match.js';
 import { discordRequest, isBotConfigured, openDmChannel } from './discord-notify.js';
 import { QUEUE_KEY, QUEUE_PREFS_KEY } from './matchmaking-tick.js';
 import {
@@ -60,7 +61,7 @@ function select(custom_id: string, options: { label: string; value: string; defa
   return { type: STRING_SELECT, custom_id, options, min_values: min, max_values: max, placeholder };
 }
 
-const siteUrl = () => process.env.FRONTEND_URL ?? 'https://rizzotto.gg';
+export const siteUrl = () => process.env.FRONTEND_URL ?? 'https://rizzotto.gg';
 const noMentions = { parse: [] as string[] };
 
 // ---------------------------------------------------------------------------
@@ -97,7 +98,7 @@ async function postMessage(channelId: string, body: DiscordMessage): Promise<str
 }
 
 /** Post a DM. 'closed' = the player doesn't accept DMs from the bot (Discord 50007 / 403). */
-async function postDm(discordId: string, body: DiscordMessage): Promise<StoredMessage | 'closed' | null> {
+export async function postDm(discordId: string, body: DiscordMessage): Promise<StoredMessage | 'closed' | null> {
   const channelId = await openDmChannel(discordId);
   if (!channelId) return null;
   const res = await discordRequest('POST', `/channels/${channelId}/messages`, body);
@@ -350,6 +351,8 @@ export async function renderMatchCard(fastify: FastifyInstance, matchId: string,
       id: true,
       status: true,
       winner_id: true,
+      cancelled_at: true,
+      cancelled_slot: true,
       player1_id: true,
       player2_id: true,
       competitor_format: true,
@@ -405,7 +408,8 @@ export async function renderMatchCard(fastify: FastifyInstance, matchId: string,
   const mapLine = map ? `\n🗺️ Map: **${map.name}**` : '';
   const siteLink = linkBtn('Open on rizzotto.gg', `${siteUrl()}/matches/${match.id}`);
   const id = `${match.id}:${current?.game_number ?? 1}`;
-  const cancelRow = row(btn('Cancel match', `mc_cancel:${match.id}`, DANGER), siteLink);
+  // A late report on a cancelled match walks the same steps below, but can't be cancelled again.
+  const cancelRow = match.status === 'CANCELLED' ? row(siteLink) : row(btn('Cancel match', `mc_cancel:${match.id}`, DANGER), siteLink);
   const msg = (body: string, components: object[]): DiscordMessage => ({
     content: `${header}${mapLine}\n\n${body}`,
     components,
@@ -414,7 +418,19 @@ export async function renderMatchCard(fastify: FastifyInstance, matchId: string,
     allowed_mentions: { parse: [], users: opponent?.discord_id ? [opponent.discord_id] : [] },
   });
 
-  if (match.status === 'CANCELLED') return msg('This match was cancelled.', [row(siteLink)]);
+  if (match.status === 'CANCELLED' && !(current?.reported_at && current.status !== 'COMPLETED')) {
+    const open = isLateReportOpen(match) && current?.status === 'CANCELLED' && !!current.blind_pick?.revealed_at;
+    const until = open ? `<t:${Math.floor(lateReportDeadline(match)!.getTime() / 1000)}:t>` : '';
+    if (match.cancelled_slot === viewerId) {
+      return msg(open ? `You cancelled this match. If the battle was played, ${oppName} can still report the result until ${until}.` : 'You cancelled this match.', [row(siteLink)]);
+    }
+    if (open) {
+      return msg(`${oppName} cancelled this match. If you played the battle, report the result until ${until} and attach the replay. It then counts as normal.`, [
+        row(btn('I won', `mc_won:${id}`, SUCCESS), btn('They won', `mc_lost:${id}`, SECONDARY), siteLink),
+      ]);
+    }
+    return msg(match.cancelled_slot ? `${oppName} cancelled this match.` : 'This match was cancelled.', [row(siteLink)]);
+  }
   if (match.status === 'COMPLETED' || match.status === 'FORFEIT' || match.status === 'NO_CONTEST') {
     const result = match.winner_id === viewerId ? `You won ${won}–${lost}. GG!` : match.winner_id === opponentId ? `${oppName} won ${lost}–${won}. GG!` : `It ended ${won}–${lost}. GG!`;
     return msg(`**Match over.** ${result}`, [row(btn('Find another game', 'jp_find', PRIMARY), siteLink)]);

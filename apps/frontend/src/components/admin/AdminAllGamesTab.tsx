@@ -71,15 +71,16 @@ export function AdminAllGamesTab() {
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const [cancelledOnly, setCancelledOnly] = useState(false);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounced(search, 350);
   const filters = parseGameSearch(debouncedSearch);
   const filterKey = JSON.stringify(filters);
   // Reset to page 1 whenever the search changes.
-  useEffect(() => { setPage(1); }, [filterKey]);
+  useEffect(() => { setPage(1); }, [filterKey, cancelledOnly]);
   const { data, isLoading: allLoading } = useQuery({
-    queryKey: ['admin-all-games', page, filterKey],
-    queryFn: () => getMetaGames(page, PAGE_SIZE, filters),
+    queryKey: ['admin-all-games', page, filterKey, cancelledOnly],
+    queryFn: () => getMetaGames(page, PAGE_SIZE, cancelledOnly ? { ...filters, cancelled: '1' } : filters),
     enabled: !flaggedOnly,
   });
   const { data: auditData, isLoading: auditLoading } = useQuery({
@@ -141,7 +142,7 @@ export function AdminAllGamesTab() {
   const total = flaggedOnly ? (auditData?.total ?? 0) : (data?.total ?? 0);
   const isLoading = flaggedOnly ? auditLoading : allLoading;
   const totalPages = flaggedOnly ? 1 : Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const colSpan = flaggedOnly ? 15 : 14;
+  const colSpan = flaggedOnly || cancelledOnly ? 15 : 14;
 
   const save = (game: GameHistoryEntry, body: EditBody) => mutation.mutate({ game, body });
 
@@ -150,12 +151,12 @@ export function AdminAllGamesTab() {
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500">
-            {flaggedOnly ? 'Flagged Games' : 'All Games'}{' '}
-            <span className="text-sm font-normal text-stone-500">({total}{flaggedOnly ? ' flagged' : ' total'})</span>
+            {flaggedOnly ? 'Flagged Games' : cancelledOnly ? 'Cancelled Games' : 'All Games'}{' '}
+            <span className="text-sm font-normal text-stone-500">({total}{flaggedOnly ? ' flagged' : cancelledOnly ? ' without a result' : ' total'})</span>
           </h2>
           <button
             type="button"
-            onClick={() => setFlaggedOnly((v) => !v)}
+            onClick={() => { setFlaggedOnly((v) => !v); setCancelledOnly(false); }}
             className={`rounded border px-2.5 py-1 text-xs transition-colors ${
               flaggedOnly
                 ? 'border-amber-600 text-amber-300 hover:border-amber-400'
@@ -164,6 +165,19 @@ export function AdminAllGamesTab() {
           >
             {flaggedOnly ? '← All games' : '⚑ Flagged only'}
           </button>
+          {!flaggedOnly && (
+            <button
+              type="button"
+              onClick={() => setCancelledOnly((v) => !v)}
+              className={`rounded border px-2.5 py-1 text-xs transition-colors ${
+                cancelledOnly
+                  ? 'border-red-700 text-red-300 hover:border-red-500'
+                  : 'border-stone-700 text-stone-400 hover:border-rizzotto-gold-500 hover:text-rizzotto-gold-400'
+              }`}
+            >
+              {cancelledOnly ? '← All games' : '✕ Cancelled'}
+            </button>
+          )}
         </div>
         {totalPages > 1 && (
           <div className="flex items-center gap-3 text-sm">
@@ -221,6 +235,9 @@ export function AdminAllGamesTab() {
         {' '}<span className="text-amber-400/80">Flagged only</span> lists games with a data
         anomaly (draw, missing/mirror faction, faction outside the allowlist, SFT mismatch, or an
         Official game on a voided match) so you can clean them up.
+        {' '}<span className="text-red-400/80">Cancelled</span> lists Open Play games that were cancelled
+        after both factions were revealed. Pick a winner to add the result: the game then counts like
+        any other.
       </p>
 
       {isLoading && (
@@ -238,6 +255,7 @@ export function AdminAllGamesTab() {
               <tr className="border-b border-stone-800 bg-stone-900/60 text-left">
                 <th className="px-3 py-2 font-medium text-stone-400">Game ID</th>
                 {flaggedOnly && <th className="px-3 py-2 font-medium text-stone-400">Issues</th>}
+                {cancelledOnly && !flaggedOnly && <th className="px-3 py-2 font-medium text-stone-400">Cancelled by</th>}
                 <th className="px-3 py-2 font-medium text-stone-400">Date</th>
                 <th className="px-3 py-2 font-medium text-stone-400">Tournament</th>
                 <th className="px-3 py-2 font-medium text-stone-400">R·G</th>
@@ -275,6 +293,13 @@ export function AdminAllGamesTab() {
                           </div>
                         </td>
                       )}
+                      {cancelledOnly && !flaggedOnly && (
+                        <td className="px-3 py-2 text-xs whitespace-nowrap text-red-300">
+                          <Link to="/matches/$matchId" params={{ matchId: g.matchId }} className="hover:underline">
+                            {g.cancelledBy ?? 'not recorded'}
+                          </Link>
+                        </td>
+                      )}
                       <td className="px-3 py-2 text-stone-500 text-xs whitespace-nowrap">
                         {g.playedAt ? formatSiteDateTime(g.playedAt) : '—'}
                       </td>
@@ -296,7 +321,7 @@ export function AdminAllGamesTab() {
                         <select
                           className={selectClass}
                           value={g.player1FactionId ?? ''}
-                          disabled={busy}
+                          disabled={busy || cancelledOnly}
                           onChange={(e) => save(g, { player1FactionId: e.target.value || null })}
                         >
                           <option value="">— none —</option>
@@ -308,7 +333,7 @@ export function AdminAllGamesTab() {
                         <select
                           className={selectClass}
                           value={g.player2FactionId ?? ''}
-                          disabled={busy}
+                          disabled={busy || cancelledOnly}
                           onChange={(e) => save(g, { player2FactionId: e.target.value || null })}
                         >
                           <option value="">— none —</option>
@@ -319,7 +344,7 @@ export function AdminAllGamesTab() {
                         <select
                           className={selectClass}
                           value={currentMapId}
-                          disabled={busy}
+                          disabled={busy || cancelledOnly}
                           onChange={(e) => save(g, { pickedMapId: e.target.value || null })}
                         >
                           <option value="">— none —</option>
@@ -331,9 +356,15 @@ export function AdminAllGamesTab() {
                           className={selectClass}
                           value={g.winnerId ?? ''}
                           disabled={busy}
-                          onChange={(e) => save(g, { winnerId: e.target.value || null })}
+                          onChange={(e) => {
+                            if (!cancelledOnly) return save(g, { winnerId: e.target.value || null });
+                            const winner = e.target.value === g.player1?.id ? g.player1?.username : g.player2?.username;
+                            if (e.target.value && window.confirm(`Add this result? ${winner} gets the win and the game counts for every statistic.`)) {
+                              save(g, { winnerId: e.target.value });
+                            }
+                          }}
                         >
-                          <option value="">— none —</option>
+                          <option value="">{cancelledOnly ? 'Cancelled' : '— none —'}</option>
                           {g.player1 && <option value={g.player1.id}>{g.player1.username}</option>}
                           {g.player2 && <option value={g.player2.id}>{g.player2.username}</option>}
                         </select>
@@ -346,7 +377,7 @@ export function AdminAllGamesTab() {
                       <td className="px-3 py-2 text-xs">
                         <button
                           type="button"
-                          disabled={busy}
+                          disabled={busy || cancelledOnly}
                           onClick={() => save(g, { countsForLeaderboard: g.countsForLeaderboard === false })}
                           title="Official games count for every statistic (leaderboard, heatmaps, faction stats). Click to toggle."
                           className={`rounded border px-2 py-0.5 text-[10px] transition-colors disabled:opacity-40 ${

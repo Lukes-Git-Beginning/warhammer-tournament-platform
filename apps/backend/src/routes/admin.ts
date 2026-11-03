@@ -35,6 +35,7 @@ import {
 } from '../lib/skill-classification.js';
 import { skillToBand } from '../lib/rating-model.js';
 import { getQueuePenaltyState, resetQueuePenaltyToWarned } from '../lib/queue-penalty.js';
+import { banUser } from '../lib/ban-user.js';
 import { publishChangelog, changelogChannelId } from '../lib/changelog-publish.js';
 import { BroadcastAudienceSchema, resolveAdminAudience, sendBroadcast } from '../lib/broadcast.js';
 import { SkillScopeSchema } from '../lib/broadcast-audience.js';
@@ -477,28 +478,8 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     if (!user) return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
     if (user.deleted_at) return reply.code(409).send({ error: 'Conflict', message: 'User already banned', statusCode: 409 });
 
-    const banned = await fastify.prisma.$transaction(async (tx) => {
-      const u = await tx.user.update({
-        where: { id: userId },
-        data: { deleted_at: new Date() },
-        select: { id: true, username: true, deleted_at: true },
-      });
-      await tx.auditLog.create({
-        data: {
-          entity_type: 'User',
-          entity_id: u.id,
-          action: 'BAN',
-          actor_id: request.user.sub,
-          old_value: { deleted_at: null },
-          new_value: { deleted_at: u.deleted_at?.toISOString() ?? null },
-        },
-      });
-      return u;
-    });
-
-    // Invalidate role cache so banned user can't keep using stale role
-    if (fastify.redis) await invalidate(fastify.redis, `user:role:${userId}`);
-    await invalidate(fastify.redis, cacheKey('admin:stats', {}));
+    const banned = await banUser(fastify, userId, request.user.sub);
+    if (!banned) return reply.code(409).send({ error: 'Conflict', message: 'User already banned', statusCode: 409 });
 
     return { id: banned.id, username: banned.username, deleted_at: banned.deleted_at?.toISOString() ?? null };
   });

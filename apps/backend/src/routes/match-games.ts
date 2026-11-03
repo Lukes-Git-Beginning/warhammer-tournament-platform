@@ -4,6 +4,7 @@ import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ensureMatchGame, finalizeGameResult } from '../lib/match-games.js';
+import { isLateReportOpen, lateReportDeadline } from '../lib/cancel-open-play-match.js';
 import { Prisma } from '@rizzotto/db';
 import { REPLAY_DIR, validateReplayUpload } from '../lib/replays.js';
 import { resolveReplayValues } from '../lib/replay-apply.js';
@@ -375,6 +376,9 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           player1_id: true,
           player2_id: true,
           withdrawn_player_id: true,
+          cancelled_at: true,
+          cancelled_by_id: true,
+          cancelled_slot: true,
           tournament_id: true,
           competitor_format: true,
           tournament: { select: { host_id: true, mode: true, counts_for_leaderboard: true, competitor_format: true } },
@@ -469,12 +473,20 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
               },
             ];
 
+      const canceller = match.cancelled_by_id
+        ? await fastify.prisma.user.findUnique({ where: { id: match.cancelled_by_id }, select: { username: true } })
+        : null;
+
       return reply.code(200).send({
         games,
         // Match-level fields the frontend GameTile needs for the "opponent withdrew" banner.
         player1Id: match.player1_id,
         player2Id: match.player2_id,
         withdrawnPlayerId: match.withdrawn_player_id ?? null,
+        // ...and for a cancelled match: who did it, and until when the other side can still report.
+        cancelledBy: canceller?.username ?? null,
+        cancelledSlot: match.cancelled_slot,
+        lateReportUntil: isLateReportOpen(match) ? (lateReportDeadline(match)?.toISOString() ?? null) : null,
       });
     },
   );
@@ -518,6 +530,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: matchId, deleted_at: null },
         select: {
           id: true,
+          status: true,
           tournament_id: true,
           player1_id: true,
           player2_id: true,
@@ -541,6 +554,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
               player1_faction_id_2: true,
               player2_faction_id_2: true,
               status: true,
+              blind_pick: { select: { revealed_at: true } },
             },
           },
         },
@@ -558,6 +572,34 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
       const game = match.games.find((g) => g.game_number === gameNumber);
       if (!game) {
         return reply.code(404).send({ error: 'NotFound', message: 'Game not found', statusCode: 404 });
+      }
+
+      // A cancelled game has no result to correct: naming a winner adds it, and the game then counts
+      // like any reported one. Also for a late report still held for its replay.
+      if (game.status === 'CANCELLED' || (match.status === 'CANCELLED' && game.status === 'PENDING')) {
+        const winnerId = body.winnerId;
+        if (!winnerId || (winnerId !== match.player1_id && winnerId !== match.player2_id)) {
+          return reply.code(422).send({ error: 'UnprocessableEntity', message: 'A cancelled game can only be given a winner', statusCode: 422 });
+        }
+        if (!game.blind_pick?.revealed_at) {
+          return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Both factions were never picked, so no battle was played', statusCode: 422 });
+        }
+        await fastify.prisma.matchGame.update({
+          where: { id: game.id },
+          data: { status: 'PENDING', reported_winner_id: winnerId, reporter_id: userId, reported_at: new Date(), verification: Prisma.DbNull, counts_for_leaderboard: true },
+        });
+        await finalizeGameResult(fastify, game.id);
+        if (fastify.redis) {
+          await Promise.all([
+            invalidate(fastify.redis, 'leaderboard:*'),
+            invalidate(fastify.redis, 'rating-model:*'),
+            invalidate(fastify.redis, 'h2h:*'),
+          ]);
+        }
+        await fastify.prisma.auditLog.create({
+          data: { entity_type: 'MatchGame', entity_id: game.id, action: 'cancelled_game_result_added', actor_id: userId, new_value: { winner_id: winnerId } },
+        });
+        return reply.code(200).send({ ok: true });
       }
 
       // Proposed values (undefined = leave unchanged).
@@ -1239,6 +1281,8 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         select: {
           id: true,
           status: true,
+          cancelled_at: true,
+          cancelled_slot: true,
           player1_id: true,
           player2_id: true,
           tournament_id: true,
@@ -1251,10 +1295,14 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
       }
 
-      if (match.status !== 'PENDING' && match.status !== 'ONGOING') {
+      // A cancelled match can't swallow a result: the other side can still report for a while.
+      const lateReport = isLateReportOpen(match);
+      if (match.status !== 'PENDING' && match.status !== 'ONGOING' && !lateReport) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
-          message: `Match is already ${match.status}`,
+          message: match.status === 'CANCELLED' && match.cancelled_slot
+            ? 'The time to report this cancelled match is over. An admin can still add the result.'
+            : `Match is already ${match.status}`,
           statusCode: 422,
         });
       }
@@ -1272,6 +1320,28 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           message: 'Only match participants can report game results',
           statusCode: 403,
         });
+      }
+
+      if (lateReport) {
+        if ((isPlayer1 ? match.player1_id : match.player2_id) === match.cancelled_slot) {
+          return reply.code(403).send({
+            error: 'Forbidden',
+            message: 'You cancelled this match, so only your opponent can still report it.',
+            statusCode: 403,
+          });
+        }
+        // Only a game that got as far as the battle: both factions revealed, and not already settled.
+        const cancelledGame = await fastify.prisma.matchGame.findUnique({
+          where: { match_id_game_number: { match_id: matchId, game_number: gameNumber } },
+          select: { status: true, reported_at: true, blind_pick: { select: { revealed_at: true } } },
+        });
+        if (!cancelledGame?.blind_pick?.revealed_at || (cancelledGame.status !== 'CANCELLED' && !cancelledGame.reported_at)) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: 'This match was cancelled before this battle could be played.',
+            statusCode: 422,
+          });
+        }
       }
 
       // The opposing competitor's actor for notifications: the opposing team's captain (2v2)
@@ -1374,6 +1444,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
             reporter_id: userId,
             reported_at: now,
             replay_url: replayUrl,
+            ...(existingGame.status === 'CANCELLED' ? { status: 'PENDING' as const, counts_for_leaderboard: true } : {}),
           },
         });
 

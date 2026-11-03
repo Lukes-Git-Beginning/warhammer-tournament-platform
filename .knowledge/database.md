@@ -3,6 +3,7 @@
 **TL;DR:**
 - Prisma 7 (`^7.8.0`) mit driver-adapter `PrismaPg` aus `@prisma/adapter-pg` — kein nativer Prisma-Connection-String-Modus.
 - 28 Models in `packages/db/prisma/schema.prisma`. Welle-2-Models: Map, TournamentMapPool, MatchMapDecision, MatchBlindPick, TournamentArmyList, SteamLink, AdminConfig. (`FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` per `drop_welle2_mmr_deprecated` entfernt.)
+- **2026-11-03 Migration `open_play_cancelled_by`:** `Match.cancelled_at` / `cancelled_by_id` / `cancelled_slot`. Abbruch bleibt als Ergebnis erhalten: Slot gesetzt = ein Spieler hat abgebrochen, die andere Seite kann 2 h nachmelden (`LATE_REPORT_WINDOW_MS`, `lib/cancel-open-play-match.ts`); leer = No-Show-Timeout oder Staff. Admins tragen über `PATCH /api/matches/:id/games/:n` jederzeit einen Sieger nach; Liste: `GET /api/meta/games?cancelled=1` (Staff). Meldung gegen den Abbrecher → Admin-DM mit Bann-Option (`lib/open-play-cancel-notify.ts`, Buttons `ca_*`).
 - **2026-06-28 Batch (Branch `feat/2d3-mode`, additiv via psql + `migrate resolve`):**
   - **2D3-Modus:** `TournamentMode` Enum um `TWO_D_THREE` erweitert; `TournamentParticipant.faction_ids String[] @default([])` (die 3 bei Registrierung gewählten Fraktionen; pro Game zieht der Server zufällig eine, analog SFT-Latch).
   - **NO_CONTEST (B10):** `MatchStatus` Enum um `NO_CONTEST` erweitert (technischer Double-Bye, getrennt von DRAW). Standings: beide +1, 0 BH.

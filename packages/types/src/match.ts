@@ -227,4 +227,6 @@ export interface GameHistoryEntry {
   tournament?: GameHistoryTournament;
   /** Open Play origin: 'QUEUE' (ladder) or 'CHALLENGE'; null/undefined for tournament games */
   matchSource?: 'QUEUE' | 'CHALLENGE' | null;
+  /** Staff's cancelled view only: the player who cancelled (null = no-show timeout, staff or before this was kept) */
+  cancelledBy?: string | null;
 }
