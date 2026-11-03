@@ -79,6 +79,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
       const displayName = profile.global_name ?? profile.username;
 
+      // A banned account stays out until an admin lifts the ban.
+      const banned = await fastify.prisma.user.findFirst({
+        where: { discord_id: profile.id, deleted_at: { not: null } },
+        select: { id: true },
+      });
+      if (banned) return reply.redirect(`${frontendUrl}/login?banned=1`);
+
       const user = await fastify.prisma.user.upsert({
         where: { discord_id: profile.id },
         create: {

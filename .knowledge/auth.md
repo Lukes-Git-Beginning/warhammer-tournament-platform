@@ -70,6 +70,8 @@ Alle registriert in `apps/backend/src/plugins/auth.ts` via `fastify.decorate(...
 
 ---
 
+**Bann (seit v2.31.0):** `User.deleted_at` gesetzt = gebannt (es gibt keinen anderen Weg dorthin). `authenticate` antwortet dann 401 (`user:banned:<id>`, 60 s gecacht, fail-open, von `banUser` und dem Unban invalidiert), und der Discord-Callback leitet ohne Cookie auf `/login?banned=1`. Bannen immer über `lib/ban-user.ts`.
+
 ## Hook-Pattern für geschützte Routes
 
 ```typescript

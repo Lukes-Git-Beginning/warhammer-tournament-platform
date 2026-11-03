@@ -118,7 +118,8 @@
   "login": {
     "title": "Sign In",
     "subtitle": "Sign in with your Discord account to enter tournaments or create your own.",
-    "discord_button": "Sign in with Discord"
+    "discord_button": "Sign in with Discord",
+    "banned": "This account is banned. If you think that's wrong, contact the admin team on Discord."
   },
   "leaderboard": {
     "title": "Leaderboard",

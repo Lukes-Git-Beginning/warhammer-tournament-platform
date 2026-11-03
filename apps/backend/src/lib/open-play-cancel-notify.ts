@@ -85,7 +85,7 @@ export async function alertCancelAfterLoss(fastify: FastifyInstance, matchId: st
     const body =
       `**[RizzOtto's Arena] 🚩 Cancelled after losing?**\n\n` +
       `**${name}** cancelled his Open Play match against **${winner}**. ${how}, and the result counts now.\n\n` +
-      `Please look into it, then decide. A ban stays until an admin lifts it under Admin → Users, and the bot tells the player why and how to reach you.`;
+      `Please look into it, then decide. A ban stays until an admin lifts it under Admin → User Management, and the bot tells the player why and how to reach you.`;
     const links = [
       { type: 2, style: 5, label: 'Open match', url: matchUrl(matchId) },
       ...(game.replay_url ? [{ type: 2, style: 5, label: 'Download replay', url: `${siteUrl()}${game.replay_url}` }] : []),

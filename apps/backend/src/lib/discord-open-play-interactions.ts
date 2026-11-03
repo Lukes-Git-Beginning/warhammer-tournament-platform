@@ -389,7 +389,7 @@ async function handleCancelAlert(fastify: FastifyInstance, i: Interaction, disco
   const [matchId] = parts;
   if (!matchId) return ephemeral('Invalid button.');
   if (action === 'ca_ban') {
-    return ephemeral('Ban this player? He can\'t log in or play until an admin lifts the ban under Admin → Users, and the bot tells him why and how to reach you.', [
+    return ephemeral('Ban this player? He can\'t log in or play until an admin lifts the ban under Admin → User Management, and the bot tells him why and how to reach you.', [
       { type: 1, components: [{ type: 2, style: 4, label: 'Yes, ban him', custom_id: `ca_banyes:${matchId}` }] },
     ]);
   }

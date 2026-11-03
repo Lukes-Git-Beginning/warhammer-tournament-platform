@@ -217,6 +217,20 @@ describe('POST /api/admin/users/:id/ban', () => {
     expect(log?.actor_id).toBe(ADMIN_ID);
   });
 
+  it('ends the running session of the banned user, until the ban is lifted', async () => {
+    const admin = { auth_token: makeToken(ADMIN_ID, 'ADMIN') };
+    const session = { auth_token: makeToken(TARGET_ID, 'USER') };
+    expect((await app.inject({ method: 'GET', url: '/api/users/me', cookies: session })).statusCode).toBe(200);
+
+    await app.inject({ method: 'POST', url: `/api/admin/users/${TARGET_ID}/ban`, cookies: admin });
+    const banned = await app.inject({ method: 'GET', url: '/api/users/me', cookies: session });
+    expect(banned.statusCode).toBe(401);
+    expect(banned.json().message).toContain('banned');
+
+    await app.inject({ method: 'DELETE', url: `/api/admin/users/${TARGET_ID}/ban`, cookies: admin });
+    expect((await app.inject({ method: 'GET', url: '/api/users/me', cookies: session })).statusCode).toBe(200);
+  });
+
   it('returns 409 when user is already banned', async () => {
     // Pre-ban
     await prisma.user.update({

@@ -511,6 +511,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (fastify.redis) await invalidate(fastify.redis, `user:role:${userId}`);
+    if (fastify.redis) await invalidate(fastify.redis, `user:banned:${userId}`);
     await invalidate(fastify.redis, cacheKey('admin:stats', {}));
 
     return { id: unbanned.id, username: unbanned.username };

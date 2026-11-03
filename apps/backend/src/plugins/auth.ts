@@ -56,6 +56,21 @@ export default fp(
           statusCode: 401,
         });
       }
+      // A ban ends a running session too. Fails open: a Redis or DB hiccup must not lock everyone out.
+      try {
+        const sub = request.user.sub;
+        const banned = await cached<boolean>(
+          fastify.hasDecorator('redis') ? (fastify as unknown as { redis: import('ioredis').Redis }).redis : undefined,
+          `user:banned:${sub}`,
+          async () => (await fastify.prisma.user.count({ where: { id: sub, deleted_at: { not: null } } })) > 0,
+          { ttlSeconds: 60 },
+        );
+        if (banned) {
+          return reply.code(401).send({ error: 'Unauthorized', message: 'This account is banned', statusCode: 401 });
+        }
+      } catch {
+        /* see above */
+      }
       // Sliding session: re-issue the cookie so the full lifetime always counts from the user's LAST
       // action. An active user is therefore NEVER logged out mid-session; a session only lapses after
       // a full period of true inactivity (default 7 days without any request). Throttled to at most

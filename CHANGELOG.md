@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 ### Fixed
 - The match page said that cancelling counts as a draw for both players. It doesn't: a game without a reported result is dropped.
+- **A ban now locks the account for real.** It ends a running session and blocks the login until an admin lifts it. Before, it only kept the player out of the Open Play queue and the admin pages.
 
 ## [2.30.1] — 2026-11-01
 

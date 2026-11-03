@@ -81,6 +81,23 @@ describe('Discord OAuth callback', () => {
     expect(dbUser!.last_login).not.toBeNull();
   });
 
+  it('sends a banned account back to the login page without a session', async () => {
+    await prisma.user.create({ data: { discord_id: DISCORD_USER.id, username: DISCORD_USER.global_name, deleted_at: new Date() } });
+    const initial = await app.inject({ method: 'GET', url: '/auth/discord' });
+    const stateCookie = initial.cookies.find((c) => c.name === 'oauth2-redirect-state');
+    const state = new URL(initial.headers.location as string).searchParams.get('state');
+
+    const callback = await app.inject({
+      method: 'GET',
+      url: `/auth/discord/callback?code=fake_code&state=${state}`,
+      cookies: { 'oauth2-redirect-state': stateCookie!.value },
+    });
+
+    expect(callback.statusCode).toBe(302);
+    expect(callback.headers.location).toContain('/login?banned=1');
+    expect(callback.cookies.find((c) => c.name === 'auth_token')).toBeUndefined();
+  });
+
   it('GET /api/users/me returns 401 without cookie', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/users/me' });
     expect(res.statusCode).toBe(401);

@@ -3,8 +3,8 @@ import { cacheKey, invalidate } from './cache.js';
 import { leaveOpenPlayQueue } from './open-play-queue-service.js';
 
 /**
- * Ban a user: the account is soft-deleted until an admin lifts it (Admin → Users), so he can't log
- * in, queue or play. Returns null when he is already banned.
+ * Ban a user: the account is soft-deleted until an admin lifts it (Admin → User Management), so he
+ * can't log in, queue or play, and a running session ends. Returns null when he is already banned.
  */
 export async function banUser(
   fastify: FastifyInstance,
@@ -32,6 +32,7 @@ export async function banUser(
 
   // Invalidate role cache so banned user can't keep using stale role
   if (fastify.redis) await invalidate(fastify.redis, `user:role:${userId}`);
+  if (fastify.redis) await invalidate(fastify.redis, `user:banned:${userId}`);
   await invalidate(fastify.redis, cacheKey('admin:stats', {}));
   // A banned player must not stay matchable.
   await leaveOpenPlayQueue(fastify, userId).catch(() => {});
