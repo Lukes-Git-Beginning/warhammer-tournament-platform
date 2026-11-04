@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
-## [3.0.0] — 2026-11-02
+## [3.0.0] — 2026-11-04
 
 ### Added
 - **RizzOtto's Arena Mod.** Every game on the Arena now runs with one mod. It adds the arena modes to the custom battle lobby (Domquest, Land Battle, Conquest, Domination, Siege Battle and Free-For-All Battle) with their maps, lobby settings and bans, and enforces the Fruit Rules in Land Battle, Conquest and Siege. You no longer need the Total Tavern map pack or Loupi's Fruit Rules mod, so disable both. Get it on the Steam Workshop; the new How to Play page walks you through it.
