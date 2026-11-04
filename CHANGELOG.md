@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [3.0.2] — 2026-11-04
+
+### Fixed
+- **Every header tab has room again.** With the new tabs the header ran out of space and the last ones slid under your profile picture. It now grows as wide as your tabs need, and when your window is too narrow for them you get the menu button instead. That menu now closes once you pick a tab.
+
 ## [3.0.1] — 2026-11-04
 
 ### Fixed

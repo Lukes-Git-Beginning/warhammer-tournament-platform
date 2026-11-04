@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Menu, X } from 'lucide-react';
@@ -12,12 +12,38 @@ import { ActiveMatchIndicator } from './ActiveMatchIndicator';
 const NAV_LINK_CLASS =
   'font-display text-[13px] uppercase tracking-wider whitespace-nowrap text-rizzotto-stone-300 hover:text-rizzotto-gold-400 transition-colors';
 const NAV_LINK_ACTIVE_PROPS = { className: 'text-rizzotto-gold-400' };
+// What the tabs get back once the hamburger is gone (p-2 + size-5 + the auth area's gap-2.5).
+const HAMBURGER_ROOM = 46;
+
+// Whether every tab fits next to the logo and the auth area. Measured instead of tied to a breakpoint:
+// the width they need depends on the role, the username and the active match indicator. Below xl the nav
+// isn't laid out (both widths 0) and the hamburger shows either way.
+function useNavFits() {
+  const navRef = useRef<HTMLElement>(null);
+  const linksRef = useRef<HTMLDivElement>(null);
+  const [fits, setFits] = useState(true);
+
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    const links = linksRef.current;
+    if (!nav || !links || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() =>
+      setFits((fit) => links.offsetWidth <= nav.clientWidth + (fit ? 0 : HAMBURGER_ROOM)),
+    );
+    observer.observe(nav);
+    observer.observe(links);
+    return () => observer.disconnect();
+  }, []);
+
+  return { navRef, linksRef, fits };
+}
 
 export function Header() {
   const { t } = useTranslation();
   const { data: user } = useAuthQuery();
   const { mutate: doLogout, isPending } = useLogout();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { navRef, linksRef, fits } = useNavFits();
 
   const canCreate =
     user?.role === 'HOST' || user?.role === 'MODERATOR' || user?.role === 'ADMIN';
@@ -123,7 +149,8 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-rizzotto-iron-700 bg-rizzotto-iron-950/92 backdrop-blur-md">
-      <div className="mx-auto flex max-w-[96rem] items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8 xl:px-12">
+      {/* 96rem wide, or as wide as the tabs need if the window has the room */}
+      <div className="mx-auto flex w-max max-w-full min-w-[min(100%,96rem)] items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8 xl:px-12">
         {/* Logo lockup */}
         <Link
           to="/"
@@ -134,8 +161,14 @@ export function Header() {
         </Link>
 
         {/* Desktop Nav */}
-        <nav aria-label="Primary" className="hidden min-w-0 items-center gap-4 xl:flex">
-          {navLinks}
+        <nav
+          ref={navRef}
+          aria-label="Primary"
+          className={cn('hidden min-w-0 flex-auto justify-center xl:flex', !fits && 'invisible')}
+        >
+          <div ref={linksRef} className="flex w-max shrink-0 items-center gap-4">
+            {navLinks}
+          </div>
         </nav>
 
         {/* Auth area + Hamburger */}
@@ -179,7 +212,8 @@ export function Header() {
           <button
             type="button"
             className={cn(
-              'xl:hidden p-2 text-rizzotto-stone-300 hover:text-rizzotto-gold-400 transition-colors rounded-sm',
+              'p-2 text-rizzotto-stone-300 hover:text-rizzotto-gold-400 transition-colors rounded-sm',
+              fits && 'xl:hidden',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rizzotto-gold-500',
             )}
             aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
@@ -199,7 +233,11 @@ export function Header() {
       {mobileMenuOpen && (
         <nav
           aria-label="Mobile"
-          className="xl:hidden border-t border-rizzotto-iron-700 bg-rizzotto-iron-950 px-4 py-4 flex flex-col gap-3"
+          className={cn(
+            'border-t border-rizzotto-iron-700 bg-rizzotto-iron-950 px-4 py-4 flex flex-col gap-3 sm:px-6 lg:px-8 xl:px-12',
+            fits && 'xl:hidden',
+          )}
+          onClick={() => setMobileMenuOpen(false)}
           data-testid="mobile-menu"
         >
           {navLinks}
