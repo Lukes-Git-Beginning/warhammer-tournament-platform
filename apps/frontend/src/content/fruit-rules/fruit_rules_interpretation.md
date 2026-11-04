@@ -118,11 +118,12 @@ Per army. A unit can count toward several categories.
 | Multi-entity ranged cavalry & chariots | 6 | Units with the ranged cavalry symbol on the faction page. |
 | Flying ranged units | 3 | Units that fly and have ammunition. |
 | Flying units with breath attacks | 2 | Flying units with a breath attack: an activated ability (not a spell) that fires a breath, for example every dragon breath, the Terrorgheist's Death Shriek and the Exalted Bloodthirster's Bellow of Fury. |
+| Marked units | 5 (Warriors of Chaos), 4 (Beastmen) | Units with a mark on their unit card (PDF p. 2), including the Mutalith Vortex Beast, Cockatrice, Slaughterbrute and Sarthorael, and six Slaanesh characters on a Daemonic Steed or chariot that the game's own group leaves out. |
 
 These category limits of the PDF are the game's own unit caps with the same values; the game
-enforces them with unit caps on: heroes 2, flying units 6, Extended Roster units 0, marked units 5
-(Warriors of Chaos) and 4 (Beastmen). The game also caps ranged units at 12, but counts fewer units
-than the PDF (see above) and also counts the Khorne Soul Grinder; both limits apply.
+enforces them with unit caps on: heroes 2, flying units 6, Extended Roster units 0. The game also
+caps ranged units at 12, but counts fewer units than the PDF (see above) and also counts the Khorne
+Soul Grinder; both limits apply. The same goes for marked units: the game's group is smaller.
 
 
 ## 6. Ability limits
@@ -195,6 +196,7 @@ From the Fruit Rules:
 - Bloodshriek Chimera (regiment of renown; Beastmen, Norsca, Warriors of Chaos).
 - Coeddil (Wood Elves).
 - Iron Daemon with a Dreadquake Mortar carriage (Chaos Dwarfs).
+- The Blessed Tome (High Elves item).
 - Extended Roster units (the game's cap is 0).
 
 From the RizzOtto Standard Rules (not Fruit): Undead Legions, Skreech Verminking, The Masque of
@@ -235,7 +237,7 @@ applies. They are generated from the mod's own data, so they always match what t
   where stricter).
 - **Shared limits:** limits the unit shares with others, such as SAME UNIT groups, variants,
   regiments of renown counting toward their base unit, or a mount kind.
-- **Categories:** SE, RSE, Ranged, 360°, Chariot, Ranged cavalry, Flying ranged, Breath.
+- **Categories:** SE, RSE, Ranged, 360°, Chariot, Ranged cavalry, Flying ranged, Breath, Marked.
 - **Fixed abilities:** drains, nets or rampages the unit always brings.
 - **Basis:** where the limit comes from.
 - **Characters** have one row per mount. Their limits come from their mount and the categories.

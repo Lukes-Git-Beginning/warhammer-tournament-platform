@@ -42,8 +42,28 @@ describe('committed Fruit Rules data', () => {
         .flatMap((r) => r.categories.map((c) => c.tag)),
     );
     expect([...tags].sort()).toEqual(
-      ['360°', 'Breath', 'Chariot', 'Flying ranged', 'RSE', 'Ranged', 'Ranged cav', 'SE'].sort(),
+      [
+        '360°',
+        'Breath',
+        'Chariot',
+        'Flying ranged',
+        'Marked',
+        'RSE',
+        'Ranged',
+        'Ranged cav',
+        'SE',
+      ].sort(),
     );
+  });
+
+  it("shows each faction's own limit on the Marked tag", () => {
+    const marked = (name: string) =>
+      parseFruitRules(JSON.parse(limitsJson))
+        .find((f) => f.name === name)!
+        .units.flatMap((r) => r.categories)
+        .find((c) => c.tag === 'Marked');
+    expect(marked('Warriors of Chaos')?.title).toBe('Marked units (max 5 per army)');
+    expect(marked('Beastmen')?.title).toBe('Marked units (max 4 per army)');
   });
 
   it('classifies every fixed ability from the ability lists', () => {

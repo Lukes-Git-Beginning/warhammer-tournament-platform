@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [3.0.1] — 2026-11-04
+
+### Fixed
+- **The Fruit Rules page matches the mod again.** Marked units are in: the limit (Warriors of Chaos 5, Beastmen 4) and a "Marked" tag in the faction tables. Some characters on a flying mount with a ranged attack now also show the "Flying ranged" tag, and The Blessed Tome is on the list of bans.
+- **How to Play:** Patch 9.0.5 fixed capturing for Dieter Helsnicht and the Zombie Dragon in the game itself, so the mod's bug fix list only names the Spellweaver (Beasts) on Great Eagle now.
+
 ## [3.0.0] — 2026-11-04
 
 ### Added

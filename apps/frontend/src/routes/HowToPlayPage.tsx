@@ -226,10 +226,7 @@ export function HowToPlayPage() {
           <p>In every mode, the Vanilla ones included:</p>
           <ul className={ul}>
             <li>Chalice of Blood and Darkness only triggers when an enemy spellcaster within 100 m casts.</li>
-            <li>
-              Dieter Helsnicht on Undead Manticore, the Zombie Dragon and the Spellweaver (Beasts) on Great Eagle can no
-              longer capture points, like other flying units.
-            </li>
+            <li>The Spellweaver (Beasts) on Great Eagle can no longer capture points, like other flying units.</li>
             <li>Dechala keeps the melee attack penalty of The Praise of Slaanesh after switching from Dance of Destruction.</li>
             <li>Coeddil is in the Extended Roster again, like the other campaign-only characters.</li>
             <li>Army setup: much less lag when you move the mouse over unit cards and when you add units.</li>

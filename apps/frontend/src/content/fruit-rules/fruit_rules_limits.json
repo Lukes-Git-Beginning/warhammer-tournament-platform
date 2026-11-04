@@ -39,6 +39,11 @@
    "id": "breath",
    "cap": 2,
    "name": "Flying units with breath attacks"
+  },
+  {
+   "id": "marks",
+   "cap": 5,
+   "name": "Marked units"
   }
  ],
  "factions": [
@@ -191,93 +196,93 @@
     },
     {
      "id": 25,
+     "kind": "cat",
+     "cap": 4,
+     "name": "Marked units"
+    },
+    {
+     "id": 26,
      "kind": "own",
      "cap": 1,
      "name": "The Eye of Morrslieb (Cygor)"
     },
     {
-     "id": 26,
+     "id": 27,
      "kind": "own",
      "cap": 2,
      "name": "Cygor"
     },
     {
-     "id": 27,
+     "id": 28,
      "kind": "own",
      "cap": 1,
      "name": "Jabberslythe"
     },
     {
-     "id": 28,
+     "id": 29,
      "kind": "own",
      "cap": 2,
      "name": "Basilisk"
     },
     {
-     "id": 29,
+     "id": 30,
      "kind": "own",
      "cap": 4,
      "name": "Centigors"
     },
     {
-     "id": 30,
+     "id": 31,
      "kind": "own",
      "cap": 4,
      "name": "Chaos Spawn"
     },
     {
-     "id": 31,
+     "id": 32,
      "kind": "own",
      "cap": 4,
      "name": "Chaos Warhounds"
     },
     {
-     "id": 32,
+     "id": 33,
      "kind": "own",
      "cap": 4,
      "name": "Chaos Warhounds (Poison)"
     },
     {
-     "id": 33,
+     "id": 34,
      "kind": "own",
      "cap": 1,
      "name": "Cockatrice"
     },
     {
-     "id": 34,
+     "id": 35,
      "kind": "own",
      "cap": 2,
      "name": "Feral Manticore"
     },
     {
-     "id": 35,
+     "id": 36,
      "kind": "own",
      "cap": 2,
      "name": "Giant"
     },
     {
-     "id": 36,
+     "id": 37,
      "kind": "own",
      "cap": 5,
      "name": "Gor Herd"
     },
     {
-     "id": 37,
+     "id": 38,
      "kind": "own",
      "cap": 4,
      "name": "Harpies"
     },
     {
-     "id": 38,
+     "id": 39,
      "kind": "own",
      "cap": 1,
      "name": "Incarnate Elemental of Beasts"
-    },
-    {
-     "id": 39,
-     "kind": "own",
-     "cap": 4,
-     "name": "Khorngors"
     },
     {
      "id": 40,
@@ -295,34 +300,16 @@
      "id": 42,
      "kind": "own",
      "cap": 4,
-     "name": "Pestigors"
-    },
-    {
-     "id": 43,
-     "kind": "own",
-     "cap": 4,
      "name": "Razorgor Herd"
     },
     {
-     "id": 44,
-     "kind": "own",
-     "cap": 4,
-     "name": "Slaangors"
-    },
-    {
-     "id": 45,
-     "kind": "own",
-     "cap": 4,
-     "name": "Tzaangors"
-    },
-    {
-     "id": 46,
+     "id": 43,
      "kind": "own",
      "cap": 5,
      "name": "Ungor Herd"
     },
     {
-     "id": 47,
+     "id": 44,
      "kind": "own",
      "cap": 5,
      "name": "Ungor Raiders"
@@ -357,7 +344,7 @@
      "limits": [
       3,
       4,
-      28
+      29
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -451,7 +438,7 @@
      "name": "Centigors",
      "character": false,
      "limits": [
-      29
+      30
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -506,7 +493,8 @@
      "name": "Centigors of Tzeentch",
      "character": false,
      "limits": [
-      22
+      22,
+      25
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -524,7 +512,7 @@
      "name": "Chaos Spawn",
      "character": false,
      "limits": [
-      30
+      31
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -542,7 +530,7 @@
      "name": "Chaos Warhounds",
      "character": false,
      "limits": [
-      31
+      32
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -560,7 +548,7 @@
      "name": "Chaos Warhounds (Poison)",
      "character": false,
      "limits": [
-      32
+      33
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -600,7 +588,8 @@
      "limits": [
       3,
       4,
-      33
+      25,
+      34
      ],
      "fruit_cap": 1,
      "official_cap": 2,
@@ -625,7 +614,7 @@
       3,
       4,
       16,
-      26
+      27
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -664,7 +653,7 @@
      "limits": [
       3,
       4,
-      34
+      35
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -704,7 +693,7 @@
      "limits": [
       3,
       4,
-      35
+      36
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -742,7 +731,7 @@
      "name": "Gor Herd",
      "character": false,
      "limits": [
-      36
+      37
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -798,7 +787,7 @@
      "name": "Harpies",
      "character": false,
      "limits": [
-      37
+      38
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -818,7 +807,7 @@
      "limits": [
       3,
       4,
-      38
+      39
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -842,7 +831,7 @@
      "limits": [
       3,
       4,
-      27
+      28
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -864,7 +853,7 @@
      "name": "Khorngors",
      "character": false,
      "limits": [
-      39
+      25
      ],
      "fruit_cap": 4,
      "official_cap": 5,
@@ -955,7 +944,7 @@
      "name": "Pestigors",
      "character": false,
      "limits": [
-      42
+      25
      ],
      "fruit_cap": 4,
      "official_cap": 5,
@@ -1011,7 +1000,7 @@
      "name": "Razorgor Herd",
      "character": false,
      "limits": [
-      43
+      42
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -1050,7 +1039,7 @@
      "name": "Slaangors",
      "character": false,
      "limits": [
-      44
+      25
      ],
      "fruit_cap": 4,
      "official_cap": 5,
@@ -1090,7 +1079,8 @@
       3,
       4,
       23,
-      24
+      24,
+      25
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -1111,8 +1101,8 @@
       3,
       4,
       16,
-      25,
-      26
+      26,
+      27
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -1132,7 +1122,7 @@
      "limits": [
       3,
       4,
-      27
+      28
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -1172,7 +1162,7 @@
      "name": "Tzaangors",
      "character": false,
      "limits": [
-      45
+      25
      ],
      "fruit_cap": 4,
      "official_cap": 5,
@@ -1190,7 +1180,7 @@
      "name": "Ungor Herd",
      "character": false,
      "limits": [
-      46
+      43
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -1209,7 +1199,7 @@
      "character": false,
      "limits": [
       16,
-      47
+      44
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -5718,69 +5708,69 @@
     },
     {
      "id": 27,
+     "kind": "cat",
+     "cap": 3,
+     "name": "Flying ranged units"
+    },
+    {
+     "id": 28,
      "kind": "own",
      "cap": 2,
      "name": "Burning Chariot of Tzeentch"
     },
     {
-     "id": 28,
+     "id": 29,
      "kind": "own",
      "cap": 1,
      "name": "Heralds of Excess (Seeker Chariots)"
     },
     {
-     "id": 29,
+     "id": 30,
      "kind": "own",
      "cap": 1,
      "name": "Heralds of Khorne's Fury (Bloodcrushers of Khorne)"
     },
     {
-     "id": 30,
+     "id": 31,
      "kind": "own",
      "cap": 3,
      "name": "Bloodcrushers of Khorne"
     },
     {
-     "id": 31,
+     "id": 32,
      "kind": "own",
      "cap": 1,
      "name": "Khorne’s Bloody Fist (Bloodthirster)"
     },
     {
-     "id": 32,
+     "id": 33,
      "kind": "own",
      "cap": 1,
      "name": "Noxbringer (Soul Grinder of Nurgle)"
     },
     {
-     "id": 33,
+     "id": 34,
      "kind": "grp",
      "cap": 2,
      "name": "Soul Grinder of Khorne / Soul Grinder of Nurgle / Soul Grinder of Slaanesh / Soul Grinder of Tzeentch"
     },
     {
-     "id": 34,
+     "id": 35,
      "kind": "own",
      "cap": 1,
      "name": "Shrieking Skyrays (Screamers of Tzeentch)"
     },
     {
-     "id": 35,
+     "id": 36,
      "kind": "own",
      "cap": 4,
      "name": "Screamers of Tzeentch"
     },
     {
-     "id": 36,
+     "id": 37,
      "kind": "own",
      "cap": 1,
      "name": "The Angels of Decay (Plague Drones – Death's Heads)"
-    },
-    {
-     "id": 37,
-     "kind": "cat",
-     "cap": 3,
-     "name": "Flying ranged units"
     },
     {
      "id": 38,
@@ -6041,7 +6031,7 @@
      "name": "Bloodcrushers of Khorne",
      "character": false,
      "limits": [
-      30
+      31
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -6139,7 +6129,7 @@
       6,
       13,
       27,
-      37
+      28
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -6158,7 +6148,7 @@
      "character": false,
      "limits": [
       13,
-      37,
+      27,
       49
      ],
      "fruit_cap": 2,
@@ -6591,7 +6581,7 @@
      "character": false,
      "limits": [
       6,
-      28
+      29
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -6609,8 +6599,8 @@
      "name": "Heralds of Khorne's Fury (Bloodcrushers of Khorne)",
      "character": false,
      "limits": [
-      29,
-      30
+      30,
+      31
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -6670,7 +6660,7 @@
       1,
       5,
       10,
-      31
+      32
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -6711,8 +6701,8 @@
       5,
       10,
       13,
-      32,
-      33
+      33,
+      34
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -6786,7 +6776,7 @@
      "character": false,
      "limits": [
       13,
-      37
+      27
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -6894,7 +6884,7 @@
      "name": "Screamers of Tzeentch",
      "character": false,
      "limits": [
-      35
+      36
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -6948,8 +6938,8 @@
      "name": "Shrieking Skyrays (Screamers of Tzeentch)",
      "character": false,
      "limits": [
-      34,
-      35
+      35,
+      36
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -6990,7 +6980,7 @@
      "limits": [
       5,
       10,
-      33
+      34
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -7011,7 +7001,7 @@
       5,
       10,
       13,
-      33
+      34
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -7031,7 +7021,7 @@
      "limits": [
       5,
       10,
-      33
+      34
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -7052,7 +7042,7 @@
       5,
       10,
       13,
-      33
+      34
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -7071,7 +7061,7 @@
      "character": false,
      "limits": [
       13,
-      36,
+      27,
       37
      ],
      "fruit_cap": 1,
@@ -8174,7 +8164,8 @@
       5,
       10,
       13,
-      27
+      27,
+      28
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -8194,7 +8185,8 @@
      "character": true,
      "limits": [
       5,
-      13
+      13,
+      27
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -8236,7 +8228,8 @@
       5,
       10,
       13,
-      27
+      27,
+      28
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -8256,7 +8249,8 @@
      "character": true,
      "limits": [
       5,
-      13
+      13,
+      27
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -8298,7 +8292,8 @@
       5,
       10,
       13,
-      27
+      27,
+      28
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -8318,7 +8313,8 @@
      "character": true,
      "limits": [
       5,
-      13
+      13,
+      27
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -8360,7 +8356,8 @@
       5,
       10,
       13,
-      27
+      27,
+      28
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -8380,7 +8377,8 @@
      "character": true,
      "limits": [
       5,
-      13
+      13,
+      27
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -12867,201 +12865,201 @@
     },
     {
      "id": 4,
+     "kind": "cat",
+     "cap": 3,
+     "name": "Flying ranged units"
+    },
+    {
+     "id": 5,
      "kind": "own",
      "cap": 2,
      "name": "Great Moon Bird"
     },
     {
-     "id": 5,
+     "id": 6,
      "kind": "cat",
      "cap": 3,
      "name": "Rare single entities"
     },
     {
-     "id": 6,
+     "id": 7,
      "kind": "own",
      "cap": 2,
      "name": "Wu Xing War Compass"
     },
     {
-     "id": 7,
+     "id": 8,
      "kind": "own",
      "cap": 1,
      "name": "Bandits of the Silver Road (Peasant Archers)"
     },
     {
-     "id": 8,
+     "id": 9,
      "kind": "own",
      "cap": 5,
      "name": "Peasant Archers"
     },
     {
-     "id": 9,
+     "id": 10,
      "kind": "own",
      "cap": 2,
      "name": "Celestial Lion"
     },
     {
-     "id": 10,
+     "id": 11,
      "kind": "own",
      "cap": 1,
      "name": "Empress Crowmen (Onyx Crowmen)"
     },
     {
-     "id": 11,
+     "id": 12,
      "kind": "own",
      "cap": 4,
      "name": "Onyx Crowmen"
     },
     {
-     "id": 12,
+     "id": 13,
      "kind": "own",
      "cap": 1,
      "name": "Righteous Lances of Wei-Jin (Great Longma Riders)"
     },
     {
-     "id": 13,
+     "id": 14,
      "kind": "own",
      "cap": 3,
      "name": "Great Longma Riders"
     },
     {
-     "id": 14,
+     "id": 15,
      "kind": "own",
      "cap": 1,
      "name": "The Dune Dragons (Celestial Dragon Guard)"
     },
     {
-     "id": 15,
+     "id": 16,
      "kind": "own",
      "cap": 4,
      "name": "Celestial Dragon Guard"
     },
     {
-     "id": 16,
+     "id": 17,
      "kind": "own",
      "cap": 1,
      "name": "The Grace of Quai Yin (Celestial Dragon Crossbows)"
     },
     {
-     "id": 17,
+     "id": 18,
      "kind": "own",
      "cap": 4,
      "name": "Celestial Dragon Crossbows"
     },
     {
-     "id": 18,
+     "id": 19,
      "kind": "own",
      "cap": 1,
      "name": "The Green Guardian (Terracotta Sentinel)"
     },
     {
-     "id": 19,
+     "id": 20,
      "kind": "own",
      "cap": 2,
      "name": "Terracotta Sentinel"
     },
     {
-     "id": 20,
+     "id": 21,
      "kind": "own",
      "cap": 1,
      "name": "The Jade War Drum (Zhangu War Drum)"
     },
     {
-     "id": 21,
+     "id": 22,
      "kind": "own",
      "cap": 2,
      "name": "Zhangu War Drum"
     },
     {
-     "id": 22,
+     "id": 23,
      "kind": "own",
      "cap": 4,
      "name": "Crane Gunners"
     },
     {
-     "id": 23,
+     "id": 24,
      "kind": "own",
      "cap": 4,
      "name": "Fire Rain Rocket Battery"
     },
     {
-     "id": 24,
+     "id": 25,
      "kind": "own",
      "cap": 4,
      "name": "Grand Cannons"
     },
     {
-     "id": 25,
+     "id": 26,
      "kind": "own",
      "cap": 3,
      "name": "Iron Claw Tiger Warriors"
     },
     {
-     "id": 26,
+     "id": 27,
      "kind": "own",
      "cap": 5,
      "name": "Iron Hail Gunners"
     },
     {
-     "id": 27,
+     "id": 28,
      "kind": "own",
      "cap": 4,
      "name": "Jade Lancers"
     },
     {
-     "id": 28,
+     "id": 29,
      "kind": "own",
      "cap": 2,
      "name": "Jade Lion"
     },
     {
-     "id": 29,
+     "id": 30,
      "kind": "grp",
      "cap": 5,
      "name": "Jade Warrior Crossbows / Jade Warrior Crossbows (Shields)"
     },
     {
-     "id": 30,
+     "id": 31,
      "kind": "own",
      "cap": 5,
      "name": "Jade Warriors"
     },
     {
-     "id": 31,
+     "id": 32,
      "kind": "own",
      "cap": 5,
      "name": "Jade Warriors (Halberds)"
     },
     {
-     "id": 32,
+     "id": 33,
      "kind": "own",
      "cap": 2,
      "name": "Jet Lion"
     },
     {
-     "id": 33,
+     "id": 34,
      "kind": "own",
      "cap": 5,
      "name": "Nan-Gau Grenadiers"
     },
     {
-     "id": 34,
+     "id": 35,
      "kind": "own",
      "cap": 4,
      "name": "Peasant Horsemen"
     },
     {
-     "id": 35,
+     "id": 36,
      "kind": "own",
      "cap": 5,
      "name": "Peasant Long Spearmen"
-    },
-    {
-     "id": 36,
-     "kind": "cat",
-     "cap": 3,
-     "name": "Flying ranged units"
     },
     {
      "id": 37,
@@ -13089,8 +13087,8 @@
      "character": false,
      "limits": [
       3,
-      7,
-      8
+      8,
+      9
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -13109,7 +13107,7 @@
      "character": false,
      "limits": [
       3,
-      17
+      18
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -13127,7 +13125,7 @@
      "name": "Celestial Dragon Guard",
      "character": false,
      "limits": [
-      15
+      16
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -13146,8 +13144,8 @@
      "character": false,
      "limits": [
       2,
-      5,
-      9
+      6,
+      10
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -13166,7 +13164,7 @@
      "character": false,
      "limits": [
       3,
-      22
+      23
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -13184,8 +13182,8 @@
      "name": "Empress Crowmen (Onyx Crowmen)",
      "character": false,
      "limits": [
-      10,
-      11
+      11,
+      12
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -13204,7 +13202,7 @@
      "character": false,
      "limits": [
       3,
-      23
+      24
      ],
      "fruit_cap": 4,
      "official_cap": 3,
@@ -13223,7 +13221,7 @@
      "character": false,
      "limits": [
       3,
-      24
+      25
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -13241,7 +13239,7 @@
      "name": "Great Longma Riders",
      "character": false,
      "limits": [
-      13
+      14
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -13260,8 +13258,8 @@
      "character": false,
      "limits": [
       2,
-      4,
-      5
+      5,
+      6
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -13279,7 +13277,7 @@
      "name": "Iron Claw Tiger Warriors",
      "character": false,
      "limits": [
-      25
+      26
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -13298,7 +13296,7 @@
      "character": false,
      "limits": [
       3,
-      26
+      27
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -13316,7 +13314,7 @@
      "name": "Jade Lancers",
      "character": false,
      "limits": [
-      27
+      28
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -13335,8 +13333,8 @@
      "character": false,
      "limits": [
       2,
-      5,
-      28
+      6,
+      29
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -13355,7 +13353,7 @@
      "character": false,
      "limits": [
       3,
-      29
+      30
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -13374,7 +13372,7 @@
      "character": false,
      "limits": [
       3,
-      29
+      30
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -13392,7 +13390,7 @@
      "name": "Jade Warriors",
      "character": false,
      "limits": [
-      30
+      31
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -13410,7 +13408,7 @@
      "name": "Jade Warriors (Halberds)",
      "character": false,
      "limits": [
-      31
+      32
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -13429,8 +13427,8 @@
      "character": false,
      "limits": [
       2,
-      5,
-      32
+      6,
+      33
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -13449,7 +13447,7 @@
      "character": false,
      "limits": [
       3,
-      33
+      34
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -13467,7 +13465,7 @@
      "name": "Onyx Crowmen",
      "character": false,
      "limits": [
-      11
+      12
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -13486,7 +13484,7 @@
      "character": false,
      "limits": [
       3,
-      8
+      9
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -13504,7 +13502,7 @@
      "name": "Peasant Horsemen",
      "character": false,
      "limits": [
-      34
+      35
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -13522,7 +13520,7 @@
      "name": "Peasant Long Spearmen",
      "character": false,
      "limits": [
-      35
+      36
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -13540,8 +13538,8 @@
      "name": "Righteous Lances of Wei-Jin (Great Longma Riders)",
      "character": false,
      "limits": [
-      12,
-      13
+      13,
+      14
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -13562,7 +13560,7 @@
       1,
       2,
       3,
-      36
+      4
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -13582,7 +13580,7 @@
      "limits": [
       2,
       3,
-      36,
+      4,
       37
      ],
      "fruit_cap": 2,
@@ -13602,8 +13600,8 @@
      "character": false,
      "limits": [
       2,
-      5,
-      19
+      6,
+      20
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -13621,8 +13619,8 @@
      "name": "The Dune Dragons (Celestial Dragon Guard)",
      "character": false,
      "limits": [
-      14,
-      15
+      15,
+      16
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -13641,8 +13639,8 @@
      "character": false,
      "limits": [
       3,
-      16,
-      17
+      17,
+      18
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -13661,9 +13659,9 @@
      "character": false,
      "limits": [
       2,
-      5,
-      18,
-      19
+      6,
+      19,
+      20
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -13681,8 +13679,8 @@
      "name": "The Jade War Drum (Zhangu War Drum)",
      "character": false,
      "limits": [
-      20,
-      21
+      21,
+      22
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -13737,7 +13735,7 @@
      "name": "Wu Xing War Compass",
      "character": false,
      "limits": [
-      6
+      7
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -13755,7 +13753,7 @@
      "name": "Zhangu War Drum",
      "character": false,
      "limits": [
-      21
+      22
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -13794,7 +13792,8 @@
      "limits": [
       1,
       2,
-      3
+      3,
+      4
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -13852,8 +13851,8 @@
      "character": true,
      "limits": [
       2,
-      4,
-      5
+      5,
+      6
      ],
      "fruit_cap": null,
      "official_cap": 2,
@@ -13892,7 +13891,7 @@
      "character": true,
      "limits": [
       2,
-      6
+      7
      ],
      "fruit_cap": null,
      "official_cap": 2,
@@ -13950,8 +13949,8 @@
      "character": true,
      "limits": [
       2,
-      5,
-      9
+      6,
+      10
      ],
      "fruit_cap": null,
      "official_cap": 2,
@@ -14278,7 +14277,8 @@
      "limits": [
       1,
       2,
-      3
+      3,
+      4
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -14317,7 +14317,7 @@
      "character": true,
      "limits": [
       2,
-      5
+      6
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -14338,7 +14338,7 @@
      "limits": [
       2,
       3,
-      5
+      6
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -14396,7 +14396,7 @@
      "character": true,
      "limits": [
       2,
-      5
+      6
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -14416,7 +14416,7 @@
      "character": true,
      "limits": [
       2,
-      5
+      6
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -41341,87 +41341,87 @@
     },
     {
      "id": 11,
+     "kind": "cat",
+     "cap": 3,
+     "name": "Flying ranged units"
+    },
+    {
+     "id": 12,
      "kind": "own",
      "cap": 2,
      "name": "Burning Chariot of Tzeentch"
     },
     {
-     "id": 12,
+     "id": 13,
      "kind": "own",
      "cap": 1,
      "name": "Knights of Immolation (Doom Knights of Tzeentch)"
     },
     {
-     "id": 13,
+     "id": 14,
      "kind": "own",
      "cap": 3,
      "name": "Doom Knights of Tzeentch"
     },
     {
-     "id": 14,
+     "id": 15,
      "kind": "own",
      "cap": 1,
      "name": "Shrieking Skyrays (Screamers of Tzeentch)"
     },
     {
-     "id": 15,
+     "id": 16,
      "kind": "own",
      "cap": 4,
      "name": "Screamers of Tzeentch"
     },
     {
-     "id": 16,
+     "id": 17,
      "kind": "own",
      "cap": 1,
      "name": "The Chromatic Abominations (Blue Horrors of Tzeentch)"
     },
     {
-     "id": 17,
+     "id": 18,
      "kind": "own",
      "cap": 5,
      "name": "Blue Horrors of Tzeentch"
     },
     {
-     "id": 18,
+     "id": 19,
      "kind": "own",
      "cap": 1,
      "name": "The Golden Griffin of Theurgy (Lord of Change)"
     },
     {
-     "id": 19,
+     "id": 20,
      "kind": "own",
      "cap": 1,
      "name": "The Severed Claw (Aspiring Champions)"
     },
     {
-     "id": 20,
+     "id": 21,
      "kind": "own",
      "cap": 1,
      "name": "The Sourguts (Pink Horrors of Tzeentch)"
     },
     {
-     "id": 21,
+     "id": 22,
      "kind": "own",
      "cap": 5,
      "name": "Pink Horrors of Tzeentch"
     },
     {
-     "id": 22,
+     "id": 23,
      "kind": "own",
      "cap": 1,
      "name": "Wyrd Spawn (Chaos Spawn)"
     },
     {
-     "id": 23,
+     "id": 24,
      "kind": "cat",
      "cap": 6,
      "name": "Ranged units with 360-degree firing arcs"
-    },
-    {
-     "id": 24,
-     "kind": "cat",
-     "cap": 3,
-     "name": "Flying ranged units"
     },
     {
      "id": 25,
@@ -41595,7 +41595,7 @@
      "character": false,
      "limits": [
       7,
-      17
+      18
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -41617,7 +41617,7 @@
       7,
       8,
       11,
-      23,
+      12,
       24
      ],
      "fruit_cap": 2,
@@ -41655,7 +41655,7 @@
      "character": false,
      "limits": [
       7,
-      24,
+      11,
       26,
       27
      ],
@@ -41863,7 +41863,7 @@
      "name": "Doom Knights of Tzeentch",
      "character": false,
      "limits": [
-      13
+      14
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -41975,8 +41975,8 @@
      "name": "Knights of Immolation (Doom Knights of Tzeentch)",
      "character": false,
      "limits": [
-      12,
-      13
+      13,
+      14
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -42015,7 +42015,7 @@
      "character": false,
      "limits": [
       7,
-      23,
+      24,
       27,
       39
      ],
@@ -42096,7 +42096,7 @@
      "character": false,
      "limits": [
       7,
-      21
+      22
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -42114,7 +42114,7 @@
      "name": "Screamers of Tzeentch",
      "character": false,
      "limits": [
-      15
+      16
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -42132,8 +42132,8 @@
      "name": "Shrieking Skyrays (Screamers of Tzeentch)",
      "character": false,
      "limits": [
-      14,
-      15
+      15,
+      16
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -42191,8 +42191,8 @@
      "character": false,
      "limits": [
       7,
-      16,
-      17
+      17,
+      18
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -42213,7 +42213,7 @@
       1,
       2,
       4,
-      18
+      19
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -42231,7 +42231,7 @@
      "name": "The Severed Claw (Aspiring Champions)",
      "character": false,
      "limits": [
-      19
+      20
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -42250,8 +42250,8 @@
      "character": false,
      "limits": [
       7,
-      20,
-      21
+      21,
+      22
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -42287,7 +42287,7 @@
      "name": "Wyrd Spawn (Chaos Spawn)",
      "character": false,
      "limits": [
-      22
+      23
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -42934,7 +42934,8 @@
       2,
       4,
       7,
-      11
+      11,
+      12
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -42954,7 +42955,8 @@
      "character": true,
      "limits": [
       2,
-      7
+      7,
+      11
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -42996,7 +42998,8 @@
       2,
       4,
       7,
-      11
+      11,
+      12
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -43016,7 +43019,8 @@
      "character": true,
      "limits": [
       2,
-      7
+      7,
+      11
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -43058,7 +43062,8 @@
       2,
       4,
       7,
-      11
+      11,
+      12
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -43078,7 +43083,8 @@
      "character": true,
      "limits": [
       2,
-      7
+      7,
+      11
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -43120,7 +43126,8 @@
       2,
       4,
       7,
-      11
+      11,
+      12
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -43140,7 +43147,8 @@
      "character": true,
      "limits": [
       2,
-      7
+      7,
+      11
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -47534,558 +47542,546 @@
     },
     {
      "id": 2,
+     "kind": "cat",
+     "cap": 5,
+     "name": "Marked units"
+    },
+    {
+     "id": 3,
      "kind": "own",
      "cap": 1,
      "name": "Chaos Warshrine of Slaanesh"
     },
     {
-     "id": 3,
+     "id": 4,
      "kind": "cat",
      "cap": 3,
      "name": "Rare single entities"
     },
     {
-     "id": 4,
+     "id": 5,
      "kind": "mount",
      "cap": 2,
      "name": "Bilespurter mounts"
     },
     {
-     "id": 5,
+     "id": 6,
      "kind": "own",
      "cap": 1,
      "name": "Chaos Warshrine of Nurgle"
     },
     {
-     "id": 6,
+     "id": 7,
      "kind": "mount",
      "cap": 2,
      "name": "Tripletongue mounts"
     },
     {
-     "id": 7,
+     "id": 8,
      "kind": "mount",
      "cap": 2,
      "name": "Whippermaw mounts"
     },
     {
-     "id": 8,
+     "id": 9,
      "kind": "own",
      "cap": 1,
      "name": "Mutalith Vortex Beast"
     },
     {
-     "id": 9,
+     "id": 10,
      "kind": "own",
      "cap": 1,
      "name": "Bane of Wittengast (Giant Spined Chaos Beast)"
     },
     {
-     "id": 10,
+     "id": 11,
      "kind": "own",
      "cap": 2,
      "name": "Giant Spined Chaos Beast"
     },
     {
-     "id": 11,
+     "id": 12,
      "kind": "own",
      "cap": 1,
      "name": "Bilious Thunderguff (Chaos Giant)"
     },
     {
-     "id": 12,
+     "id": 13,
      "kind": "own",
      "cap": 2,
      "name": "Chaos Giant"
     },
     {
-     "id": 13,
+     "id": 14,
      "kind": "own",
      "cap": 0,
      "name": "Bloodshriek Chimera (Chimera)"
     },
     {
-     "id": 14,
+     "id": 15,
      "kind": "cat",
      "cap": 2,
      "name": "Flying units with breath attacks"
     },
     {
-     "id": 15,
+     "id": 16,
      "kind": "own",
      "cap": 1,
      "name": "Bloodwake Berserkers (Wrathmongers)"
     },
     {
-     "id": 16,
+     "id": 17,
      "kind": "own",
      "cap": 3,
      "name": "Wrathmongers"
     },
     {
-     "id": 17,
+     "id": 18,
      "kind": "own",
      "cap": 2,
      "name": "Chaos Feral Manticore"
     },
     {
-     "id": 18,
+     "id": 19,
      "kind": "cat",
      "cap": 3,
      "name": "Chariots"
     },
     {
-     "id": 19,
+     "id": 20,
      "kind": "mount",
      "cap": 2,
      "name": "Juggernaut mounts"
     },
     {
-     "id": 20,
+     "id": 21,
      "kind": "own",
      "cap": 1,
      "name": "Chaos Warshrine"
     },
     {
-     "id": 21,
+     "id": 22,
      "kind": "own",
      "cap": 1,
      "name": "Chaos Warshrine of Tzeentch"
     },
     {
-     "id": 22,
+     "id": 23,
      "kind": "own",
      "cap": 1,
      "name": "Knights of Immolation (Doom Knights of Tzeentch)"
     },
     {
-     "id": 23,
+     "id": 24,
      "kind": "own",
      "cap": 3,
      "name": "Doom Knights of Tzeentch"
     },
     {
-     "id": 24,
+     "id": 25,
      "kind": "own",
      "cap": 1,
      "name": "Knights of the Brazen Throne (Skullcrushers of Khorne)"
     },
     {
-     "id": 25,
+     "id": 26,
      "kind": "own",
      "cap": 3,
      "name": "Skullcrushers of Khorne"
     },
     {
-     "id": 26,
+     "id": 27,
      "kind": "own",
      "cap": 1,
      "name": "Mirror Guard (Chaos Warriors)"
     },
     {
-     "id": 27,
+     "id": 28,
      "kind": "own",
      "cap": 5,
      "name": "Chaos Warriors"
     },
     {
-     "id": 28,
+     "id": 29,
      "kind": "own",
      "cap": 1,
      "name": "Pleasure Guard (Champions of Slaanesh)"
     },
     {
-     "id": 29,
+     "id": 30,
      "kind": "own",
      "cap": 3,
      "name": "Champions Of Slaanesh"
     },
     {
-     "id": 30,
+     "id": 31,
      "kind": "own",
      "cap": 1,
      "name": "Summoners of Rage (Dragon Ogres)"
     },
     {
-     "id": 31,
+     "id": 32,
      "kind": "own",
      "cap": 3,
      "name": "Dragon Ogres"
     },
     {
-     "id": 32,
+     "id": 33,
      "kind": "own",
      "cap": 1,
      "name": "Swords of Chaos (Chaos Knights)"
     },
     {
-     "id": 33,
+     "id": 34,
      "kind": "own",
      "cap": 3,
      "name": "Chaos Knights"
     },
     {
-     "id": 34,
+     "id": 35,
      "kind": "own",
      "cap": 1,
      "name": "The Daemonspew (Forsaken)"
     },
     {
-     "id": 35,
+     "id": 36,
      "kind": "own",
      "cap": 5,
      "name": "Forsaken"
     },
     {
-     "id": 36,
+     "id": 37,
      "kind": "mount",
      "cap": 2,
      "name": "Ghurk mounts"
     },
     {
-     "id": 37,
+     "id": 38,
      "kind": "own",
      "cap": 1,
      "name": "The Repugnauts of Brass Keep (Putrid Blightkings – Dual Axes)"
     },
     {
-     "id": 38,
+     "id": 39,
      "kind": "own",
      "cap": 2,
      "name": "Putrid Blightkings (Dual Axes)"
     },
     {
-     "id": 39,
+     "id": 40,
      "kind": "grp",
      "cap": 4,
      "name": "Putrid Blightkings (all variants)"
     },
     {
-     "id": 40,
+     "id": 41,
      "kind": "own",
      "cap": 1,
      "name": "The Rotting Riders (Rot Knights)"
     },
     {
-     "id": 41,
+     "id": 42,
      "kind": "own",
      "cap": 3,
      "name": "Rot Knights"
     },
     {
-     "id": 42,
+     "id": 43,
      "kind": "own",
      "cap": 1,
      "name": "The Severed Claw (Aspiring Champions)"
     },
     {
-     "id": 43,
+     "id": 44,
      "kind": "own",
      "cap": 4,
      "name": "Aspiring Champions"
     },
     {
-     "id": 44,
+     "id": 45,
      "kind": "own",
      "cap": 1,
      "name": "The Sibilant Slaughtercade (Chaos Chariots)"
     },
     {
-     "id": 45,
+     "id": 46,
      "kind": "own",
      "cap": 1,
      "name": "The Soul of Damnation (Hellcannon)"
     },
     {
-     "id": 46,
+     "id": 47,
      "kind": "own",
      "cap": 2,
      "name": "Hellcannon"
     },
     {
-     "id": 47,
+     "id": 48,
      "kind": "cat",
      "cap": 12,
      "name": "Ranged units"
     },
     {
-     "id": 48,
+     "id": 49,
      "kind": "own",
      "cap": 1,
      "name": "Wyrd Spawn (Chaos Spawn)"
     },
     {
-     "id": 49,
+     "id": 50,
      "kind": "own",
      "cap": 4,
      "name": "Chaos Spawn"
     },
     {
-     "id": 50,
+     "id": 51,
      "kind": "own",
      "cap": 3,
      "name": "Chaos Knights (Lances)"
     },
     {
-     "id": 51,
+     "id": 52,
      "kind": "own",
      "cap": 2,
      "name": "Chaos Lord of Khorne"
     },
     {
-     "id": 52,
+     "id": 53,
      "kind": "own",
      "cap": 5,
      "name": "Chaos Warriors (Halberds)"
     },
     {
-     "id": 53,
+     "id": 54,
      "kind": "own",
      "cap": 3,
      "name": "Chosen"
     },
     {
-     "id": 54,
+     "id": 55,
      "kind": "own",
      "cap": 2,
      "name": "Exalted Hero of Khorne"
     },
     {
-     "id": 55,
+     "id": 56,
      "kind": "own",
      "cap": 2,
      "name": "Gorebeast Chariots of Khorne"
     },
     {
-     "id": 56,
+     "id": 57,
      "kind": "own",
      "cap": 4,
      "name": "Marauder Horsemen (Throwing Axes)"
     },
     {
-     "id": 57,
+     "id": 58,
      "kind": "cat",
      "cap": 6,
      "name": "Ranged units with 360-degree firing arcs"
     },
     {
-     "id": 58,
+     "id": 59,
      "kind": "own",
      "cap": 5,
      "name": "Marauders"
     },
     {
-     "id": 59,
+     "id": 60,
      "kind": "own",
      "cap": 4,
      "name": "Skullreapers"
     },
     {
-     "id": 60,
+     "id": 61,
      "kind": "own",
      "cap": 5,
      "name": "Chaos Warriors (Great Weapons)"
     },
     {
-     "id": 61,
+     "id": 62,
      "kind": "own",
      "cap": 5,
      "name": "Marauders (Great Weapons)"
     },
     {
-     "id": 62,
+     "id": 63,
      "kind": "own",
      "cap": 4,
      "name": "Spawn of Nurgle"
     },
     {
-     "id": 63,
+     "id": 64,
      "kind": "own",
      "cap": 4,
      "name": "Chaos Warriors of Slaanesh"
     },
     {
-     "id": 64,
+     "id": 65,
      "kind": "own",
      "cap": 4,
      "name": "Marauder Horsemen"
     },
     {
-     "id": 65,
+     "id": 66,
      "kind": "own",
      "cap": 4,
      "name": "Spawn of Slaanesh"
     },
     {
-     "id": 66,
+     "id": 67,
      "kind": "grp",
      "cap": 3,
      "name": "Chosen (Halberds)"
     },
     {
-     "id": 67,
+     "id": 68,
      "kind": "own",
      "cap": 4,
      "name": "Spawn of Tzeentch"
     },
     {
-     "id": 68,
+     "id": 69,
      "kind": "own",
      "cap": 4,
      "name": "Bile Trolls"
     },
     {
-     "id": 69,
+     "id": 70,
      "kind": "own",
      "cap": 4,
      "name": "Bloodbeasts of Khorne"
     },
     {
-     "id": 70,
+     "id": 71,
      "kind": "grp",
      "cap": 4,
      "name": "Chaos Trolls / Chaos Trolls (Armoured)"
     },
     {
-     "id": 71,
+     "id": 72,
      "kind": "own",
      "cap": 4,
      "name": "Chaos Warhounds"
     },
     {
-     "id": 72,
+     "id": 73,
      "kind": "own",
      "cap": 4,
      "name": "Chaos Warhounds (Poison)"
     },
     {
-     "id": 73,
+     "id": 74,
      "kind": "own",
      "cap": 4,
      "name": "Chaos Warriors of Khorne (Dual Weapons)"
     },
     {
-     "id": 74,
+     "id": 75,
      "kind": "own",
      "cap": 4,
      "name": "Chaos Warriors of Slaanesh (Hellscourges)"
     },
     {
-     "id": 75,
+     "id": 76,
      "kind": "grp",
      "cap": 3,
      "name": "Chosen (Great Weapons) / Chosen of Nurgle (Great Weapons)"
     },
     {
-     "id": 76,
+     "id": 77,
      "kind": "own",
      "cap": 3,
      "name": "Chosen of Khorne (Dual Weapons)"
     },
     {
-     "id": 77,
+     "id": 78,
      "kind": "own",
      "cap": 3,
      "name": "Chosen of Slaanesh (Hellscourges)"
     },
     {
-     "id": 78,
+     "id": 79,
      "kind": "own",
      "cap": 5,
      "name": "Flayerkin"
     },
     {
-     "id": 79,
+     "id": 80,
      "kind": "own",
      "cap": 4,
      "name": "Hellstriders of Slaanesh"
     },
     {
-     "id": 80,
+     "id": 81,
      "kind": "own",
      "cap": 4,
      "name": "Hellstriders of Slaanesh (Hellscourges)"
     },
     {
-     "id": 81,
+     "id": 82,
      "kind": "own",
      "cap": 4,
      "name": "Marauder Horsemasters"
     },
     {
-     "id": 82,
-     "kind": "own",
-     "cap": 5,
-     "name": "Marauders of Khorne (Dual Weapons)"
-    },
-    {
      "id": 83,
-     "kind": "own",
-     "cap": 5,
-     "name": "Marauders of Slaanesh (Hellscourges)"
-    },
-    {
-     "id": 84,
-     "kind": "own",
-     "cap": 5,
-     "name": "Marauders of Tzeentch (Spears)"
-    },
-    {
-     "id": 85,
      "kind": "own",
      "cap": 1,
      "name": "Sons of the Last Plague (Chosen of Nurgle – Great Weapons)"
     },
     {
-     "id": 86,
+     "id": 84,
      "kind": "own",
      "cap": 1,
      "name": "The Slaughtergard (Chosen of Khorne – Halberds)"
     },
     {
-     "id": 87,
+     "id": 85,
      "kind": "own",
      "cap": 2,
      "name": "Basilisk"
     },
     {
-     "id": 88,
+     "id": 86,
      "kind": "own",
      "cap": 2,
      "name": "Chaos Siege Giant"
     },
     {
-     "id": 89,
+     "id": 87,
      "kind": "own",
      "cap": 1,
      "name": "Cockatrice"
     },
     {
-     "id": 90,
+     "id": 88,
      "kind": "own",
      "cap": 2,
      "name": "Dragon Ogre Shaggoth"
     },
     {
-     "id": 91,
+     "id": 89,
      "kind": "own",
      "cap": 1,
      "name": "Dread Maw"
     },
     {
-     "id": 92,
+     "id": 90,
      "kind": "own",
      "cap": 2,
      "name": "Putrid Blightkings"
     },
     {
-     "id": 93,
+     "id": 91,
      "kind": "own",
      "cap": 2,
      "name": "Putrid Blightkings (Great Weapons)"
     },
     {
-     "id": 94,
+     "id": 92,
      "kind": "own",
      "cap": 2,
      "name": "Slaughterbrute"
@@ -48098,8 +48094,9 @@
      "character": false,
      "limits": [
       1,
-      3,
-      8
+      2,
+      4,
+      9
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -48121,7 +48118,7 @@
      "name": "Aspiring Champions",
      "character": false,
      "limits": [
-      43
+      44
      ],
      "fruit_cap": 4,
      "official_cap": 3,
@@ -48140,9 +48137,9 @@
      "character": false,
      "limits": [
       1,
-      3,
-      9,
-      10
+      4,
+      10,
+      11
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -48161,8 +48158,8 @@
      "character": false,
      "limits": [
       1,
-      3,
-      87
+      4,
+      85
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -48180,7 +48177,8 @@
      "name": "Bile Trolls",
      "character": false,
      "limits": [
-      68
+      2,
+      69
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -48199,9 +48197,10 @@
      "character": false,
      "limits": [
       1,
-      3,
-      11,
-      12
+      2,
+      4,
+      12,
+      13
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -48219,7 +48218,8 @@
      "name": "Bloodbeasts of Khorne",
      "character": false,
      "limits": [
-      69
+      2,
+      70
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -48238,8 +48238,8 @@
      "character": false,
      "limits": [
       1,
-      13,
-      14
+      14,
+      15
      ],
      "fruit_cap": 0,
      "official_cap": 1,
@@ -48257,8 +48257,9 @@
      "name": "Bloodwake Berserkers (Wrathmongers)",
      "character": false,
      "limits": [
-      15,
-      16
+      2,
+      16,
+      17
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -48276,7 +48277,8 @@
      "name": "Champions Of Slaanesh",
      "character": false,
      "limits": [
-      29
+      2,
+      30
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -48294,7 +48296,7 @@
      "name": "Chaos Chariots",
      "character": false,
      "limits": [
-      18
+      19
      ],
      "fruit_cap": 3,
      "official_cap": 4,
@@ -48312,7 +48314,8 @@
      "name": "Chaos Chariots of Khorne",
      "character": false,
      "limits": [
-      18
+      2,
+      19
      ],
      "fruit_cap": 3,
      "official_cap": 4,
@@ -48330,7 +48333,8 @@
      "name": "Chaos Chariots of Nurgle",
      "character": false,
      "limits": [
-      18
+      2,
+      19
      ],
      "fruit_cap": 3,
      "official_cap": 4,
@@ -48348,7 +48352,8 @@
      "name": "Chaos Chariots of Slaanesh",
      "character": false,
      "limits": [
-      18
+      2,
+      19
      ],
      "fruit_cap": 3,
      "official_cap": 4,
@@ -48366,7 +48371,8 @@
      "name": "Chaos Chariots of Tzeentch",
      "character": false,
      "limits": [
-      18
+      2,
+      19
      ],
      "fruit_cap": 3,
      "official_cap": 4,
@@ -48385,8 +48391,8 @@
      "character": false,
      "limits": [
       1,
-      3,
-      17
+      4,
+      18
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -48405,8 +48411,8 @@
      "character": false,
      "limits": [
       1,
-      3,
-      12
+      4,
+      13
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -48424,7 +48430,7 @@
      "name": "Chaos Knights",
      "character": false,
      "limits": [
-      33
+      34
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -48442,7 +48448,7 @@
      "name": "Chaos Knights (Lances)",
      "character": false,
      "limits": [
-      50
+      51
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -48460,7 +48466,8 @@
      "name": "Chaos Knights of Khorne",
      "character": false,
      "limits": [
-      33
+      2,
+      34
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -48478,7 +48485,8 @@
      "name": "Chaos Knights of Khorne (Lances)",
      "character": false,
      "limits": [
-      50
+      2,
+      51
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -48496,7 +48504,8 @@
      "name": "Chaos Knights of Nurgle",
      "character": false,
      "limits": [
-      33
+      2,
+      34
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -48514,7 +48523,8 @@
      "name": "Chaos Knights of Nurgle (Lances)",
      "character": false,
      "limits": [
-      50
+      2,
+      51
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -48532,7 +48542,8 @@
      "name": "Chaos Knights of Slaanesh",
      "character": false,
      "limits": [
-      33
+      2,
+      34
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -48550,7 +48561,8 @@
      "name": "Chaos Knights of Slaanesh (Lances)",
      "character": false,
      "limits": [
-      50
+      2,
+      51
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -48568,7 +48580,8 @@
      "name": "Chaos Knights of Tzeentch",
      "character": false,
      "limits": [
-      33
+      2,
+      34
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -48586,7 +48599,8 @@
      "name": "Chaos Knights of Tzeentch (Lances)",
      "character": false,
      "limits": [
-      50
+      2,
+      51
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -48605,8 +48619,8 @@
      "character": false,
      "limits": [
       1,
-      3,
-      88
+      4,
+      86
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -48624,7 +48638,7 @@
      "name": "Chaos Spawn",
      "character": false,
      "limits": [
-      49
+      50
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -48642,7 +48656,7 @@
      "name": "Chaos Trolls",
      "character": false,
      "limits": [
-      70
+      71
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -48660,7 +48674,7 @@
      "name": "Chaos Trolls (Armoured)",
      "character": false,
      "limits": [
-      70
+      71
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -48678,7 +48692,7 @@
      "name": "Chaos Warhounds",
      "character": false,
      "limits": [
-      71
+      72
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -48696,7 +48710,7 @@
      "name": "Chaos Warhounds (Poison)",
      "character": false,
      "limits": [
-      72
+      73
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -48714,7 +48728,8 @@
      "name": "Chaos Warhounds of Khorne",
      "character": false,
      "limits": [
-      71
+      2,
+      72
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -48732,7 +48747,7 @@
      "name": "Chaos Warriors",
      "character": false,
      "limits": [
-      27
+      28
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -48750,7 +48765,7 @@
      "name": "Chaos Warriors (Great Weapons)",
      "character": false,
      "limits": [
-      60
+      61
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -48768,7 +48783,7 @@
      "name": "Chaos Warriors (Halberds)",
      "character": false,
      "limits": [
-      52
+      53
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -48786,7 +48801,8 @@
      "name": "Chaos Warriors of Khorne",
      "character": false,
      "limits": [
-      27
+      2,
+      28
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -48804,7 +48820,8 @@
      "name": "Chaos Warriors of Khorne (Dual Weapons)",
      "character": false,
      "limits": [
-      73
+      2,
+      74
      ],
      "fruit_cap": 4,
      "official_cap": 5,
@@ -48822,7 +48839,8 @@
      "name": "Chaos Warriors of Khorne (Halberds)",
      "character": false,
      "limits": [
-      52
+      2,
+      53
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -48840,7 +48858,8 @@
      "name": "Chaos Warriors of Nurgle",
      "character": false,
      "limits": [
-      27
+      2,
+      28
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -48858,7 +48877,8 @@
      "name": "Chaos Warriors of Nurgle (Great Weapons)",
      "character": false,
      "limits": [
-      60
+      2,
+      61
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -48876,8 +48896,9 @@
      "name": "Chaos Warriors of Slaanesh",
      "character": false,
      "limits": [
-      27,
-      63
+      2,
+      28,
+      64
      ],
      "fruit_cap": 4,
      "official_cap": 5,
@@ -48895,7 +48916,8 @@
      "name": "Chaos Warriors of Slaanesh (Hellscourges)",
      "character": false,
      "limits": [
-      74
+      2,
+      75
      ],
      "fruit_cap": 4,
      "official_cap": 5,
@@ -48913,7 +48935,8 @@
      "name": "Chaos Warriors of Tzeentch",
      "character": false,
      "limits": [
-      27
+      2,
+      28
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -48931,7 +48954,8 @@
      "name": "Chaos Warriors of Tzeentch (Halberds)",
      "character": false,
      "limits": [
-      52
+      2,
+      53
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -48950,8 +48974,8 @@
      "character": false,
      "limits": [
       1,
-      3,
-      20
+      4,
+      21
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -48970,8 +48994,9 @@
      "character": false,
      "limits": [
       1,
-      3,
-      20
+      2,
+      4,
+      21
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -48990,9 +49015,10 @@
      "character": false,
      "limits": [
       1,
-      3,
-      5,
-      20
+      2,
+      4,
+      6,
+      21
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -49013,7 +49039,8 @@
       1,
       2,
       3,
-      20
+      4,
+      21
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -49036,9 +49063,10 @@
      "character": false,
      "limits": [
       1,
-      3,
-      20,
-      21
+      2,
+      4,
+      21,
+      22
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -49057,8 +49085,8 @@
      "character": false,
      "limits": [
       1,
-      3,
-      14
+      4,
+      15
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -49076,7 +49104,7 @@
      "name": "Chosen",
      "character": false,
      "limits": [
-      53
+      54
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -49094,7 +49122,7 @@
      "name": "Chosen (Great Weapons)",
      "character": false,
      "limits": [
-      75
+      76
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -49112,7 +49140,7 @@
      "name": "Chosen (Halberds)",
      "character": false,
      "limits": [
-      66
+      67
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -49130,7 +49158,8 @@
      "name": "Chosen of Khorne",
      "character": false,
      "limits": [
-      53
+      2,
+      54
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -49148,7 +49177,8 @@
      "name": "Chosen of Khorne (Dual Weapons)",
      "character": false,
      "limits": [
-      76
+      2,
+      77
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -49166,7 +49196,8 @@
      "name": "Chosen of Nurgle",
      "character": false,
      "limits": [
-      53
+      2,
+      54
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -49184,7 +49215,8 @@
      "name": "Chosen of Nurgle (Great Weapons)",
      "character": false,
      "limits": [
-      75
+      2,
+      76
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -49202,7 +49234,8 @@
      "name": "Chosen of Slaanesh",
      "character": false,
      "limits": [
-      53
+      2,
+      54
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -49220,7 +49253,8 @@
      "name": "Chosen of Slaanesh (Hellscourges)",
      "character": false,
      "limits": [
-      77
+      2,
+      78
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -49238,7 +49272,8 @@
      "name": "Chosen of Tzeentch",
      "character": false,
      "limits": [
-      53
+      2,
+      54
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -49256,7 +49291,8 @@
      "name": "Chosen of Tzeentch (Halberds)",
      "character": false,
      "limits": [
-      66
+      2,
+      67
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -49275,8 +49311,9 @@
      "character": false,
      "limits": [
       1,
-      3,
-      89
+      2,
+      4,
+      87
      ],
      "fruit_cap": 1,
      "official_cap": 2,
@@ -49298,7 +49335,8 @@
      "name": "Doom Knights of Tzeentch",
      "character": false,
      "limits": [
-      23
+      2,
+      24
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -49317,8 +49355,8 @@
      "character": false,
      "limits": [
       1,
-      3,
-      90
+      4,
+      88
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -49336,7 +49374,7 @@
      "name": "Dragon Ogres",
      "character": false,
      "limits": [
-      31
+      32
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -49355,9 +49393,9 @@
      "character": false,
      "limits": [
       1,
-      3,
-      47,
-      91
+      4,
+      48,
+      89
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -49375,7 +49413,7 @@
      "name": "Flayerkin",
      "character": false,
      "limits": [
-      78
+      79
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -49393,7 +49431,7 @@
      "name": "Forsaken",
      "character": false,
      "limits": [
-      35
+      36
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -49411,7 +49449,8 @@
      "name": "Forsaken of Khorne",
      "character": false,
      "limits": [
-      35
+      2,
+      36
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -49429,7 +49468,8 @@
      "name": "Forsaken of Nurgle",
      "character": false,
      "limits": [
-      35
+      2,
+      36
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -49447,7 +49487,8 @@
      "name": "Forsaken of Slaanesh",
      "character": false,
      "limits": [
-      35
+      2,
+      36
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -49465,7 +49506,8 @@
      "name": "Forsaken of Tzeentch",
      "character": false,
      "limits": [
-      35
+      2,
+      36
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -49484,8 +49526,8 @@
      "character": false,
      "limits": [
       1,
-      3,
-      10
+      4,
+      11
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -49503,7 +49545,7 @@
      "name": "Gorebeast Chariots",
      "character": false,
      "limits": [
-      18
+      19
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -49521,8 +49563,9 @@
      "name": "Gorebeast Chariots of Khorne",
      "character": false,
      "limits": [
-      18,
-      55
+      2,
+      19,
+      56
      ],
      "fruit_cap": 2,
      "official_cap": 3,
@@ -49540,8 +49583,8 @@
      "name": "Hellcannon",
      "character": false,
      "limits": [
-      46,
-      47
+      47,
+      48
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -49559,7 +49602,8 @@
      "name": "Hellstriders of Slaanesh",
      "character": false,
      "limits": [
-      79
+      2,
+      80
      ],
      "fruit_cap": 4,
      "official_cap": 3,
@@ -49577,7 +49621,8 @@
      "name": "Hellstriders of Slaanesh (Hellscourges)",
      "character": false,
      "limits": [
-      80
+      2,
+      81
      ],
      "fruit_cap": 4,
      "official_cap": 3,
@@ -49595,8 +49640,9 @@
      "name": "Knights of Immolation (Doom Knights of Tzeentch)",
      "character": false,
      "limits": [
-      22,
-      23
+      2,
+      23,
+      24
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -49614,8 +49660,9 @@
      "name": "Knights of the Brazen Throne (Skullcrushers of Khorne)",
      "character": false,
      "limits": [
-      24,
-      25
+      2,
+      25,
+      26
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -49633,9 +49680,9 @@
      "name": "Marauder Horsemasters",
      "character": false,
      "limits": [
-      47,
-      57,
-      81
+      48,
+      58,
+      82
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -49653,9 +49700,9 @@
      "name": "Marauder Horsemen",
      "character": false,
      "limits": [
-      47,
-      57,
-      64
+      48,
+      58,
+      65
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -49673,9 +49720,9 @@
      "name": "Marauder Horsemen (Throwing Axes)",
      "character": false,
      "limits": [
-      47,
-      56,
-      57
+      48,
+      57,
+      58
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -49693,9 +49740,10 @@
      "name": "Marauder Horsemen of Khorne (Throwing Axes)",
      "character": false,
      "limits": [
-      47,
-      56,
-      57
+      2,
+      48,
+      57,
+      58
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -49713,9 +49761,10 @@
      "name": "Marauder Horsemen of Nurgle (Throwing Axes)",
      "character": false,
      "limits": [
-      47,
-      56,
-      57
+      2,
+      48,
+      57,
+      58
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -49733,9 +49782,10 @@
      "name": "Marauder Horsemen of Slaanesh",
      "character": false,
      "limits": [
-      47,
-      57,
-      64
+      2,
+      48,
+      58,
+      65
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -49753,9 +49803,10 @@
      "name": "Marauder Horsemen of Tzeentch",
      "character": false,
      "limits": [
-      47,
-      57,
-      64
+      2,
+      48,
+      58,
+      65
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -49773,7 +49824,7 @@
      "name": "Marauders",
      "character": false,
      "limits": [
-      58
+      59
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -49791,7 +49842,7 @@
      "name": "Marauders (Great Weapons)",
      "character": false,
      "limits": [
-      61
+      62
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -49809,7 +49860,8 @@
      "name": "Marauders of Khorne",
      "character": false,
      "limits": [
-      58
+      2,
+      59
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -49827,7 +49879,7 @@
      "name": "Marauders of Khorne (Dual Weapons)",
      "character": false,
      "limits": [
-      82
+      2
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -49845,7 +49897,8 @@
      "name": "Marauders of Nurgle",
      "character": false,
      "limits": [
-      58
+      2,
+      59
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -49863,7 +49916,8 @@
      "name": "Marauders of Nurgle (Great Weapons)",
      "character": false,
      "limits": [
-      61
+      2,
+      62
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -49881,7 +49935,8 @@
      "name": "Marauders of Slaanesh",
      "character": false,
      "limits": [
-      58
+      2,
+      59
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -49899,7 +49954,7 @@
      "name": "Marauders of Slaanesh (Hellscourges)",
      "character": false,
      "limits": [
-      83
+      2
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -49917,7 +49972,8 @@
      "name": "Marauders of Tzeentch",
      "character": false,
      "limits": [
-      58
+      2,
+      59
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -49935,7 +49991,7 @@
      "name": "Marauders of Tzeentch (Spears)",
      "character": false,
      "limits": [
-      84
+      2
      ],
      "fruit_cap": 5,
      "official_cap": 5,
@@ -49953,8 +50009,9 @@
      "name": "Mirror Guard (Chaos Warriors)",
      "character": false,
      "limits": [
-      26,
-      27
+      2,
+      27,
+      28
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -49973,8 +50030,9 @@
      "character": false,
      "limits": [
       1,
-      3,
-      8
+      2,
+      4,
+      9
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -49996,8 +50054,9 @@
      "name": "Pleasure Guard (Champions of Slaanesh)",
      "character": false,
      "limits": [
-      28,
-      29
+      2,
+      29,
+      30
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -50015,8 +50074,9 @@
      "name": "Putrid Blightkings",
      "character": false,
      "limits": [
-      39,
-      92
+      2,
+      40,
+      90
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -50034,8 +50094,9 @@
      "name": "Putrid Blightkings (Dual Axes)",
      "character": false,
      "limits": [
-      38,
-      39
+      2,
+      39,
+      40
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -50053,8 +50114,9 @@
      "name": "Putrid Blightkings (Great Weapons)",
      "character": false,
      "limits": [
-      39,
-      93
+      2,
+      40,
+      91
      ],
      "fruit_cap": 2,
      "official_cap": 2,
@@ -50072,7 +50134,8 @@
      "name": "Rot Knights",
      "character": false,
      "limits": [
-      41
+      2,
+      42
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -50090,7 +50153,8 @@
      "name": "Skullcrushers of Khorne",
      "character": false,
      "limits": [
-      25
+      2,
+      26
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -50108,7 +50172,8 @@
      "name": "Skullreapers",
      "character": false,
      "limits": [
-      59
+      2,
+      60
      ],
      "fruit_cap": 4,
      "official_cap": 5,
@@ -50127,8 +50192,9 @@
      "character": false,
      "limits": [
       1,
-      3,
-      94
+      2,
+      4,
+      92
      ],
      "fruit_cap": 2,
      "official_cap": 1,
@@ -50146,8 +50212,9 @@
      "name": "Sons of the Last Plague (Chosen of Nurgle – Great Weapons)",
      "character": false,
      "limits": [
-      75,
-      85
+      2,
+      76,
+      83
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -50165,7 +50232,8 @@
      "name": "Spawn of Nurgle",
      "character": false,
      "limits": [
-      62
+      2,
+      63
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -50183,7 +50251,8 @@
      "name": "Spawn of Slaanesh",
      "character": false,
      "limits": [
-      65
+      2,
+      66
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -50201,7 +50270,8 @@
      "name": "Spawn of Tzeentch",
      "character": false,
      "limits": [
-      67
+      2,
+      68
      ],
      "fruit_cap": 4,
      "official_cap": 4,
@@ -50219,8 +50289,8 @@
      "name": "Summoners of Rage (Dragon Ogres)",
      "character": false,
      "limits": [
-      30,
-      31
+      31,
+      32
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -50238,8 +50308,8 @@
      "name": "Swords of Chaos (Chaos Knights)",
      "character": false,
      "limits": [
-      32,
-      33
+      33,
+      34
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -50257,8 +50327,9 @@
      "name": "The Daemonspew (Forsaken)",
      "character": false,
      "limits": [
-      34,
-      35
+      2,
+      35,
+      36
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -50276,9 +50347,10 @@
      "name": "The Repugnauts of Brass Keep (Putrid Blightkings – Dual Axes)",
      "character": false,
      "limits": [
-      37,
+      2,
       38,
-      39
+      39,
+      40
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -50296,8 +50368,9 @@
      "name": "The Rotting Riders (Rot Knights)",
      "character": false,
      "limits": [
-      40,
-      41
+      2,
+      41,
+      42
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -50315,8 +50388,9 @@
      "name": "The Severed Claw (Aspiring Champions)",
      "character": false,
      "limits": [
-      42,
-      43
+      2,
+      43,
+      44
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -50334,8 +50408,9 @@
      "name": "The Sibilant Slaughtercade (Chaos Chariots)",
      "character": false,
      "limits": [
-      18,
-      44
+      2,
+      19,
+      45
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -50353,8 +50428,9 @@
      "name": "The Slaughtergard (Chosen of Khorne – Halberds)",
      "character": false,
      "limits": [
-      66,
-      86
+      2,
+      67,
+      84
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -50372,9 +50448,9 @@
      "name": "The Soul of Damnation (Hellcannon)",
      "character": false,
      "limits": [
-      45,
       46,
-      47
+      47,
+      48
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -50392,7 +50468,8 @@
      "name": "Wrathmongers",
      "character": false,
      "limits": [
-      16
+      2,
+      17
      ],
      "fruit_cap": 3,
      "official_cap": 3,
@@ -50410,8 +50487,9 @@
      "name": "Wyrd Spawn (Chaos Spawn)",
      "character": false,
      "limits": [
-      48,
-      49
+      2,
+      49,
+      50
      ],
      "fruit_cap": 1,
      "official_cap": 1,
@@ -50429,7 +50507,8 @@
      "name": "Aekold Helbrass",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -50487,7 +50566,8 @@
      "character": true,
      "limits": [
       1,
-      3
+      2,
+      4
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50507,7 +50587,7 @@
      "character": true,
      "limits": [
       1,
-      3
+      4
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50526,7 +50606,8 @@
      "name": "Bloab Rotspawned",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -50546,7 +50627,8 @@
      "character": true,
      "limits": [
       1,
-      4
+      2,
+      5
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -50585,7 +50667,7 @@
      "character": true,
      "limits": [
       1,
-      18
+      19
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50605,8 +50687,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      14
+      4,
+      15
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50645,8 +50727,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      17
+      4,
+      18
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50665,7 +50747,8 @@
      "name": "Chaos Lord of Khorne",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50684,7 +50767,8 @@
      "name": "Chaos Lord of Khorne",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50704,8 +50788,9 @@
      "character": true,
      "limits": [
       1,
-      18,
-      51
+      2,
+      19,
+      52
      ],
      "fruit_cap": 2,
      "official_cap": null,
@@ -50725,7 +50810,8 @@
      "character": true,
      "limits": [
       1,
-      19
+      2,
+      20
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50744,7 +50830,8 @@
      "name": "Chaos Lord of Nurgle",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50764,7 +50851,8 @@
      "character": true,
      "limits": [
       1,
-      18
+      2,
+      19
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50783,7 +50871,8 @@
      "name": "Chaos Lord of Nurgle",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50802,7 +50891,8 @@
      "name": "Chaos Lord of Nurgle",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50821,7 +50911,8 @@
      "name": "Chaos Lord of Slaanesh",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50841,7 +50932,8 @@
      "character": true,
      "limits": [
       1,
-      18
+      2,
+      19
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50860,7 +50952,8 @@
      "name": "Chaos Lord of Slaanesh",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50879,7 +50972,8 @@
      "name": "Chaos Lord of Slaanesh",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50898,7 +50992,8 @@
      "name": "Chaos Lord of Tzeentch",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50918,7 +51013,8 @@
      "character": true,
      "limits": [
       1,
-      18
+      2,
+      19
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50937,7 +51033,8 @@
      "name": "Chaos Lord of Tzeentch",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -50956,7 +51053,8 @@
      "name": "Chaos Lord of Tzeentch",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51014,8 +51112,9 @@
      "character": true,
      "limits": [
       1,
-      3,
-      20
+      2,
+      4,
+      21
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -51035,8 +51134,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      17
+      4,
+      18
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51094,8 +51193,9 @@
      "character": true,
      "limits": [
       1,
-      3,
-      20
+      2,
+      4,
+      21
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -51115,8 +51215,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      17
+      4,
+      18
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51174,8 +51274,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      20
+      4,
+      21
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -51195,8 +51295,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      17
+      4,
+      18
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51254,8 +51354,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      20
+      4,
+      21
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -51275,8 +51375,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      17
+      4,
+      18
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51315,8 +51415,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      14
+      4,
+      15
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51355,8 +51455,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      20
+      4,
+      21
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -51376,8 +51476,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      17
+      4,
+      18
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51416,8 +51516,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      14
+      4,
+      15
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51456,8 +51556,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      20
+      4,
+      21
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -51477,8 +51577,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      17
+      4,
+      18
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51517,8 +51617,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      14
+      4,
+      15
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51557,8 +51657,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      20
+      4,
+      21
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -51578,8 +51678,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      17
+      4,
+      18
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51618,8 +51718,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      14
+      4,
+      15
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51658,8 +51758,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      20
+      4,
+      21
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -51679,8 +51779,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      17
+      4,
+      18
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51699,7 +51799,8 @@
      "name": "Chaos Sorcerer Lord of Nurgle (Death)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51718,7 +51819,8 @@
      "name": "Chaos Sorcerer Lord of Nurgle (Death)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51738,8 +51840,9 @@
      "character": true,
      "limits": [
       1,
-      3,
-      5
+      2,
+      4,
+      6
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -51758,7 +51861,8 @@
      "name": "Chaos Sorcerer Lord of Nurgle (Nurgle)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51777,7 +51881,8 @@
      "name": "Chaos Sorcerer Lord of Nurgle (Nurgle)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51797,8 +51902,9 @@
      "character": true,
      "limits": [
       1,
-      3,
-      5
+      2,
+      4,
+      6
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -51817,7 +51923,8 @@
      "name": "Chaos Sorcerer Lord of Slaanesh (Shadows)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51838,7 +51945,8 @@
      "limits": [
       1,
       2,
-      3
+      3,
+      4
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -51861,7 +51969,8 @@
      "name": "Chaos Sorcerer Lord of Slaanesh (Shadows)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51880,7 +51989,8 @@
      "name": "Chaos Sorcerer Lord of Slaanesh (Shadows)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51899,7 +52009,8 @@
      "name": "Chaos Sorcerer Lord of Slaanesh (Slaanesh)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51920,7 +52031,8 @@
      "limits": [
       1,
       2,
-      3
+      3,
+      4
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -51943,7 +52055,8 @@
      "name": "Chaos Sorcerer Lord of Slaanesh (Slaanesh)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51962,7 +52075,8 @@
      "name": "Chaos Sorcerer Lord of Slaanesh (Slaanesh)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -51981,7 +52095,8 @@
      "name": "Chaos Sorcerer Lord of Tzeentch (Metal)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52000,7 +52115,8 @@
      "name": "Chaos Sorcerer Lord of Tzeentch (Metal)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52020,8 +52136,9 @@
      "character": true,
      "limits": [
       1,
-      3,
-      21
+      2,
+      4,
+      22
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -52040,7 +52157,8 @@
      "name": "Chaos Sorcerer Lord of Tzeentch (Metal)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52059,7 +52177,8 @@
      "name": "Chaos Sorcerer Lord of Tzeentch (Tzeentch)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52078,7 +52197,8 @@
      "name": "Chaos Sorcerer Lord of Tzeentch (Tzeentch)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52098,8 +52218,9 @@
      "character": true,
      "limits": [
       1,
-      3,
-      21
+      2,
+      4,
+      22
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -52118,7 +52239,8 @@
      "name": "Chaos Sorcerer Lord of Tzeentch (Tzeentch)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52137,7 +52259,8 @@
      "name": "Chaos Sorcerer of Nurgle (Death)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52156,7 +52279,8 @@
      "name": "Chaos Sorcerer of Nurgle (Death)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52176,8 +52300,9 @@
      "character": true,
      "limits": [
       1,
-      3,
-      5
+      2,
+      4,
+      6
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -52196,7 +52321,8 @@
      "name": "Chaos Sorcerer of Nurgle (Death)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52215,7 +52341,8 @@
      "name": "Chaos Sorcerer of Nurgle (Nurgle)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52234,7 +52361,8 @@
      "name": "Chaos Sorcerer of Nurgle (Nurgle)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52254,8 +52382,9 @@
      "character": true,
      "limits": [
       1,
-      3,
-      5
+      2,
+      4,
+      6
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -52274,7 +52403,8 @@
      "name": "Chaos Sorcerer of Nurgle (Nurgle)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52293,7 +52423,8 @@
      "name": "Chaos Sorcerer of Slaanesh (Shadows)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52312,7 +52443,8 @@
      "name": "Chaos Sorcerer of Slaanesh (Shadows)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52333,7 +52465,8 @@
      "limits": [
       1,
       2,
-      3
+      3,
+      4
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -52356,7 +52489,8 @@
      "name": "Chaos Sorcerer of Slaanesh (Shadows)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52375,7 +52509,8 @@
      "name": "Chaos Sorcerer of Slaanesh (Slaanesh)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52394,7 +52529,8 @@
      "name": "Chaos Sorcerer of Slaanesh (Slaanesh)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52415,7 +52551,8 @@
      "limits": [
       1,
       2,
-      3
+      3,
+      4
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -52438,7 +52575,8 @@
      "name": "Chaos Sorcerer of Slaanesh (Slaanesh)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52457,7 +52595,8 @@
      "name": "Chaos Sorcerer of Tzeentch (Metal)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52476,7 +52615,8 @@
      "name": "Chaos Sorcerer of Tzeentch (Metal)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52496,8 +52636,9 @@
      "character": true,
      "limits": [
       1,
-      3,
-      21
+      2,
+      4,
+      22
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -52516,7 +52657,8 @@
      "name": "Chaos Sorcerer of Tzeentch (Metal)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52535,7 +52677,8 @@
      "name": "Chaos Sorcerer of Tzeentch (Tzeentch)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52554,7 +52697,8 @@
      "name": "Chaos Sorcerer of Tzeentch (Tzeentch)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52574,8 +52718,9 @@
      "character": true,
      "limits": [
       1,
-      3,
-      21
+      2,
+      4,
+      22
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -52594,7 +52739,8 @@
      "name": "Chaos Sorcerer of Tzeentch (Tzeentch)",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52614,7 +52760,7 @@
      "character": true,
      "limits": [
       1,
-      3
+      4
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52634,7 +52780,8 @@
      "character": true,
      "limits": [
       1,
-      3
+      2,
+      4
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52654,7 +52801,8 @@
      "character": true,
      "limits": [
       1,
-      3
+      2,
+      4
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52674,7 +52822,8 @@
      "character": true,
      "limits": [
       1,
-      3
+      2,
+      4
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52694,7 +52843,8 @@
      "character": true,
      "limits": [
       1,
-      3
+      2,
+      4
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52733,7 +52883,7 @@
      "character": true,
      "limits": [
       1,
-      18
+      19
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52772,8 +52922,8 @@
      "character": true,
      "limits": [
       1,
-      3,
-      17
+      4,
+      18
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52792,7 +52942,8 @@
      "name": "Exalted Hero of Khorne",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52811,7 +52962,8 @@
      "name": "Exalted Hero of Khorne",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52831,8 +52983,9 @@
      "character": true,
      "limits": [
       1,
-      18,
-      54
+      2,
+      19,
+      55
      ],
      "fruit_cap": 2,
      "official_cap": null,
@@ -52852,7 +53005,8 @@
      "character": true,
      "limits": [
       1,
-      19
+      2,
+      20
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52871,7 +53025,8 @@
      "name": "Exalted Hero of Nurgle",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52891,7 +53046,8 @@
      "character": true,
      "limits": [
       1,
-      18
+      2,
+      19
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52910,7 +53066,8 @@
      "name": "Exalted Hero of Nurgle",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52929,7 +53086,8 @@
      "name": "Exalted Hero of Nurgle",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52948,7 +53106,8 @@
      "name": "Exalted Hero of Slaanesh",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52967,7 +53126,8 @@
      "name": "Exalted Hero of Slaanesh",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -52986,7 +53146,8 @@
      "name": "Exalted Hero of Slaanesh",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -53005,7 +53166,8 @@
      "name": "Exalted Hero of Slaanesh",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -53024,7 +53186,8 @@
      "name": "Exalted Hero of Tzeentch",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -53044,7 +53207,8 @@
      "character": true,
      "limits": [
       1,
-      18
+      2,
+      19
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -53063,7 +53227,8 @@
      "name": "Exalted Hero of Tzeentch",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -53082,7 +53247,8 @@
      "name": "Exalted Hero of Tzeentch",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -53101,7 +53267,8 @@
      "name": "Festus the Leechlord",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -53124,7 +53291,8 @@
      "name": "Gutrot Spume",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -53144,8 +53312,9 @@
      "character": true,
      "limits": [
       1,
-      3,
-      5
+      2,
+      4,
+      6
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -53184,7 +53353,7 @@
      "character": true,
      "limits": [
       1,
-      3
+      4
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -53203,7 +53372,8 @@
      "name": "Morbidex Twiceborn",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -53223,7 +53393,8 @@
      "character": true,
      "limits": [
       1,
-      6
+      2,
+      7
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -53242,7 +53413,8 @@
      "name": "Orghotts Daemonspew",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -53262,7 +53434,8 @@
      "character": true,
      "limits": [
       1,
-      7
+      2,
+      8
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -53281,7 +53454,8 @@
      "name": "Prince Sigvald the Magnificent",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -53301,7 +53475,8 @@
      "character": true,
      "limits": [
       1,
-      3
+      2,
+      4
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -53320,7 +53495,8 @@
      "name": "Scyla Anfingrimm",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -53340,7 +53516,8 @@
      "character": true,
      "limits": [
       1,
-      3
+      2,
+      4
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -53360,7 +53537,8 @@
      "character": true,
      "limits": [
       1,
-      3
+      2,
+      4
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -53380,7 +53558,8 @@
      "character": true,
      "limits": [
       1,
-      3
+      2,
+      4
      ],
      "fruit_cap": null,
      "official_cap": 1,
@@ -53400,8 +53579,9 @@
      "character": true,
      "limits": [
       1,
-      3,
-      36
+      2,
+      4,
+      37
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -53420,7 +53600,8 @@
      "name": "Valkia the Bloody",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
@@ -53439,7 +53620,8 @@
      "name": "Vilitch the Curseling",
      "character": true,
      "limits": [
-      1
+      1,
+      2
      ],
      "fruit_cap": null,
      "official_cap": null,
