@@ -53,7 +53,7 @@ export function strikeOffences(): string[] {
   const c = OPEN_PLAY_CONDUCT;
   return [
     `Leaving the queue right after joining: ${c.shortStintsPerStrike} times within ${c.shortStintWindowHours} hours, each within ${c.shortStintMinutes} minutes of joining, is one strike.`,
-    `Not picking your faction in time: ${c.pickDeadlineMinutes} minutes after your opponent picked (or after the match started, if neither of you has), the match is cancelled and whoever hasn't picked gets a strike.`,
+    `Not picking your faction in time: ${c.pickDeadlineMinutes} minutes after your opponent picked (or after the game started, if neither of you has), the match is cancelled and whoever hasn't picked gets a strike. In the 3×3 matrix, your three count as your pick.`,
   ];
 }
 

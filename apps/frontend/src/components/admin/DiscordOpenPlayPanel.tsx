@@ -94,7 +94,7 @@ export function DiscordOpenPlayPanel() {
   });
 
   const preview = useMutation({
-    mutationFn: () => postDiscordPreviewCard(),
+    mutationFn: (variant?: 'matrix') => postDiscordPreviewCard(variant),
     onSuccess: () => setStatus('Preview card sent. Check your Discord DMs.'),
     onError: (err: Error) => setStatus(err.message),
   });
@@ -147,9 +147,18 @@ export function DiscordOpenPlayPanel() {
             size="sm"
             disabled={preview.isPending}
             title="RizzBOTto DMs you a match card against himself: click through faction pick, lobby code and the result with a replay upload. No real match."
-            onClick={() => preview.mutate()}
+            onClick={() => preview.mutate(undefined)}
           >
             Send me a preview card
+          </Button>
+          <Button
+            variant="etched"
+            size="sm"
+            disabled={preview.isPending}
+            title="The same for a Bo3 in Land Battle or Conquest: pick 3 factions, then strike matchups in the 3×3 grid against RizzBOTto. No real match."
+            onClick={() => preview.mutate('matrix')}
+          >
+            Send me a matrix preview
           </Button>
         </div>
       </div>

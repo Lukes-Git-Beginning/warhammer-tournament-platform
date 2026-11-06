@@ -1874,7 +1874,9 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     if (!me?.discord_id) {
       return reply.code(400).send({ error: 'BadRequest', message: 'Your account has no Discord id', statusCode: 400 });
     }
-    const result = await sendPreviewCard(fastify, { id: me.id, discord_id: me.discord_id });
+    // { variant: 'matrix' } sends the 3×3 matrix version (a Bo3 in Land Battle or Conquest).
+    const variant = (request.body as { variant?: string } | null)?.variant === 'matrix' ? 'matrix' : undefined;
+    const result = await sendPreviewCard(fastify, { id: me.id, discord_id: me.discord_id }, variant);
     if (result !== 'sent') {
       const message = result === 'closed' ? 'RizzBOTto cannot DM you. Allow DMs from server members, then try again.' : 'Discord refused the DM.';
       return reply.code(502).send({ error: 'BadGateway', message, statusCode: 502 });

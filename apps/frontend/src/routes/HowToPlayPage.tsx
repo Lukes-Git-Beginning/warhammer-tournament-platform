@@ -349,6 +349,13 @@ export function HowToPlayPage() {
             </li>
             <li>Open the match page. It shows the map and both factions, or lets you pick and ban them, depending on the format.</li>
             <li>
+              In Open Play you pick blind: both of you choose a faction, and both are shown once you have. A Bo3 in Land
+              Battle or Conquest uses the 3×3 matrix instead, anew before every game: you each name three factions blind,
+              then take turns striking matchups in the grid until two are left, and the coin-toss winner picks the one you
+              play. Your weekly ban, set on your profile, is banned for both players in all your Open Play matches. You can
+              change it once every 7 days.
+            </li>
+            <li>
               One of you hosts the lobby in the right arena mode and enters the lobby code and password on the match
               page; the other one joins.
             </li>
@@ -385,7 +392,8 @@ export function HowToPlayPage() {
           <SubHeading>Playing the match in your DMs</SubHeading>
           <p>
             When a 1v1 game is found, your match card comes to your DMs. You can play the whole match from there: pick
-            your faction, enter the lobby code, report the result and upload the replay. The card and the match page show
+            your faction (or your three and the strikes of the 3×3 matrix), enter the lobby code, report the result and
+            upload the replay. You can set your weekly ban in the queue DM too. The card and the match page show
             the same match, so you can switch to the site at any time. 2v2 matches are played on the site.
           </p>
           <SubHeading>The ticker channel</SubHeading>

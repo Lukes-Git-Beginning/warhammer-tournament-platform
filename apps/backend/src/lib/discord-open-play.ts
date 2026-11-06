@@ -10,6 +10,7 @@
  */
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import type { Prisma } from '@rizzotto/db';
 import { BATTLE_TYPE_LABELS } from '@rizzotto/types';
 import { discordRequest, isBotConfigured, openDmChannel } from './discord-notify.js';
 import { QUEUE_KEY, QUEUE_PREFS_KEY } from './matchmaking-tick.js';
@@ -28,6 +29,7 @@ import { mapNameFromTerrain } from './replay-maps.js';
 import { parseReplayMeta } from './replay-parser.js';
 import { startOfSiteDay } from './site-time.js';
 import { openPlayBannedFactionIds } from './standard-ruleset.js';
+import { matchWeeklyBans, weeklyBanOpensAt, type WeeklyBan } from './weekly-ban.js';
 
 // ---------------------------------------------------------------------------
 // Discord wire format
@@ -206,7 +208,7 @@ async function queueableTeams(fastify: FastifyInstance, userId: string): Promise
  * multi-selects, team size as a single select, the team for 2v2), preset from the stored settings.
  * Every change is saved straight away, like on the site. While queued it shows the entry + Leave.
  */
-export async function renderJoinDm(fastify: FastifyInstance, userId: string, note?: string): Promise<DiscordMessage> {
+export async function renderJoinDm(fastify: FastifyInstance, userId: string, note?: string, banDraft?: string): Promise<DiscordMessage> {
   const openPlayLink = linkBtn('Open Play page', `${siteUrl()}/open-play`);
   const noteLine = note ? `\n\n${note}` : '';
   const queued = await findQueuedEntry(fastify, userId);
@@ -223,6 +225,22 @@ export async function renderJoinDm(fastify: FastifyInstance, userId: string, not
   const teams = is2v2 ? await queueableTeams(fastify, userId) : [];
   const team = teams.find((t) => t.id === stored.teamId) ?? teams[0];
 
+  // The weekly ban (VL picking): shown here, set or changed here while it isn't locked.
+  const [me, factions] = await Promise.all([
+    fastify.prisma.user.findUnique({ where: { id: userId }, select: { weekly_ban_faction_id: true, weekly_ban_set_at: true } }),
+    fastify.prisma.faction.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+  ]);
+  const banName = me?.weekly_ban_faction_id ? (factions.find((f) => f.id === me.weekly_ban_faction_id)?.name ?? me.weekly_ban_faction_id) : null;
+  const banOpensAt = weeklyBanOpensAt(me?.weekly_ban_set_at ?? null);
+  const draftName = banDraft && !banOpensAt ? factions.find((f) => f.id === banDraft)?.name : undefined;
+  if (banDraft && draftName) {
+    return {
+      content: `**Make ${draftName} your weekly ban?**\nIt is banned for both players in all your Open Play matches, and you can't change it again for 7 days.`,
+      components: [row(btn(`Ban ${draftName}`.slice(0, 80), `oq_banok:${banDraft}`, DANGER), btn('Back', 'oq_banno'))],
+      allowed_mentions: noMentions,
+    };
+  }
+
   const components: object[] = [
     row(select('oq_bt', ALL_BATTLE_TYPES.map((b) => ({ label: BT_LABEL[b] ?? b, value: b, default: stored.battleTypes.includes(b) })), 1, ALL_BATTLE_TYPES.length, 'Battle types')),
     row(select('oq_fmt', ALL_QUEUE_MATCH_FORMATS.map((f) => ({ label: FORMAT_LABEL[f] ?? f, value: f, default: stored.matchFormats.includes(f) })), 1, ALL_QUEUE_MATCH_FORMATS.length, 'Match format')),
@@ -234,15 +252,24 @@ export async function renderJoinDm(fastify: FastifyInstance, userId: string, not
   if (is2v2 && teams.length > 1) {
     components.push(row(select('oq_team', teams.map((t) => ({ label: t.name.slice(0, 100), value: t.id, default: t.id === team?.id })), 1, 1, 'Queue as team')));
   }
+  // Discord allows 5 rows: the ban select only fits without the team select (and while it can change).
+  if (!banOpensAt && factions.length <= 25 && components.length < 4) {
+    components.push(
+      row(select('oq_ban', factions.map((f) => ({ label: f.name, value: f.id, default: f.id === me?.weekly_ban_faction_id })), 1, 1, banName ? 'Change your weekly ban' : 'Set a weekly ban')),
+    );
+  }
   const cannot2v2 = is2v2 && teams.length === 0;
   components.push(row(btn('Join queue', 'oq_join', SUCCESS, cannot2v2), openPlayLink));
 
   const teamLine = is2v2 && team ? `\nTeam: **${team.name}**` : '';
   const blockLine = cannot2v2 ? '\n\nFor 2v2 you need to be the captain of an active team with two members.' : '';
+  const banLine = banName
+    ? `\n🚫 Weekly ban: **${banName}**, banned for both players in your matches.${banOpensAt ? ` You can change it <t:${Math.floor(banOpensAt.getTime() / 1000)}:R>.` : ''}`
+    : '\n🚫 Weekly ban: none. You can ban one faction for both players in all your matches.';
   return {
     content:
       `**Find an Open Play game**\nPick what you want to play, then join the queue. Your choice is saved, like on the Open Play page. ` +
-      `Siege is always Bo2.${teamLine}${blockLine}${noteLine}`,
+      `Siege is always Bo2. Bo3 in Land Battle and Conquest is played with the 3×3 matrix.${banLine}${teamLine}${blockLine}${noteLine}`,
     components,
     allowed_mentions: noMentions,
   };
@@ -328,14 +355,93 @@ function factionPickRows(customId: string, allowed: { id: string; name: string }
   ];
 }
 
-/** The factions a 1v1 Open Play game of this battle type may pick (the Standard Ruleset's bans out). */
-async function allowedFactions(fastify: FastifyInstance, battleType: QueueBattleType): Promise<{ id: string; name: string }[]> {
+/** The factions a 1v1 Open Play game of this battle type may pick (the Standard Ruleset's and the match's weekly bans out). */
+async function allowedFactions(
+  fastify: FastifyInstance,
+  battleType: QueueBattleType,
+  weeklyBans?: Prisma.JsonValue | null,
+): Promise<{ id: string; name: string }[]> {
   const [factions, banned] = await Promise.all([
     fastify.prisma.faction.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-    openPlayBannedFactionIds({ tournament_id: null, competitor_format: 'ONE_V_ONE', battle_type: battleType }),
+    openPlayBannedFactionIds({ tournament_id: null, competitor_format: 'ONE_V_ONE', battle_type: battleType, weekly_bans: weeklyBans }),
   ]);
   const out = new Set(banned);
   return factions.filter((f) => !out.has(f.id));
+}
+
+/** "🚫 Weekly bans: Empire (yours), Dwarfs (X's)" for the pick steps; empty when the match has none. */
+function weeklyBansLine(bans: WeeklyBan[], viewerId: string, oppName: string, name: (id: string) => string): string {
+  if (bans.length === 0) return '';
+  return `\n🚫 Weekly bans: ${bans.map((b) => `**${name(b.factionId)}** (${b.userId === viewerId ? 'yours' : `${oppName}'s`})`).join(', ')}`;
+}
+
+// ---------------------------------------------------------------------------
+// 3×3 matrix on the card (Open Play Bo3 in Land Battle and Conquest, plans/discord-open-play.md §11)
+// ---------------------------------------------------------------------------
+
+/** Seconds per strike and for the final pick, then one is made at random (mirrors matrix-auto-resolve.ts). */
+const MATRIX_TURN_SEC = 30;
+/** Who strikes, by strikes made so far: the coin-toss winner 1, the other 2, the winner 2, the other 2 (faction-matrix.ts). */
+const STRIKE_BY_TOP = [true, false, false, true, true, false, false] as const;
+const MATRIX_CELLS = ['0,0', '0,1', '0,2', '1,0', '1,1', '1,2', '2,0', '2,1', '2,2'];
+
+const MATRIX_PICK_TEXT =
+  'Pick 3 factions. They stay hidden until both of you have picked. Then you take turns striking matchups in a 3×3 grid; ' +
+  'when two are left, the coin-toss winner picks the one you play.';
+
+/** The pick-3 select, or a way to the site when Discord's 25 options can't hold the list. */
+function matrixPickRows(customId: string, allowed: { id: string; name: string }[], siteLink: string): object[] {
+  if (allowed.length > 25) return [row(linkBtn('Pick your three on rizzotto.gg', siteLink))];
+  return [row(select(customId, allowed.map((f) => ({ label: f.name, value: f.id })), 3, 3, 'Pick 3 factions'))];
+}
+
+interface MatrixGridView {
+  mine: string[];
+  theirs: string[];
+  /** Struck cells as "row,col" in the match's own terms (rows = player 1's three). */
+  struck: string[];
+  viewerIsP1: boolean;
+  iAmTop: boolean;
+  oppName: string;
+  /** Start of the current turn, for its clock; null shows none (the preview). */
+  turnStartedAt: Date | null;
+  cellId: (row: number, col: number) => string;
+}
+
+/** The grid step: both threes, whose turn it is, and the 9 matchups as buttons with the viewer's three as rows. */
+function matrixGrid(v: MatrixGridView, name: (id: string | undefined) => string): { body: string; rows: object[] } {
+  const strikes = v.struck.length;
+  const isPick = strikes >= 7;
+  const topActs = isPick || STRIKE_BY_TOP[strikes]!;
+  const myTurn = topActs === v.iAmTop;
+  let inARow = 1;
+  while (!isPick && strikes + inARow < 7 && STRIKE_BY_TOP[strikes + inARow] === topActs) inARow++;
+  const clock = v.turnStartedAt
+    ? ` ⏱ <t:${Math.floor(v.turnStartedAt.getTime() / 1000) + MATRIX_TURN_SEC}:R>, then ${isPick ? 'one is picked' : 'one is struck'} at random.`
+    : '';
+  const turn = isPick
+    ? myTurn
+      ? `**Your pick:** choose the matchup you play.${clock}`
+      : `${v.oppName} picks the matchup you play…`
+    : myTurn
+      ? `**Your turn:** strike ${inARow === 1 ? 'one matchup' : `${inARow} matchups`}.${clock}`
+      : `${v.oppName} is striking…`;
+  const coin = v.iAmTop ? 'you strike first and pick the matchup at the end' : `${v.oppName} strikes first and picks the matchup at the end`;
+  const body =
+    `Your three: ${v.mine.map((f) => `**${name(f)}**`).join(', ')}\n` +
+    `${v.oppName}'s three: ${v.theirs.map((f) => `**${name(f)}**`).join(', ')}\n` +
+    `🪙 Coin toss: ${coin}.\n\n${turn}`;
+  const rows = [0, 1, 2].map((r) =>
+    row(
+      ...[0, 1, 2].map((c) => {
+        const [ar, ac] = v.viewerIsP1 ? [r, c] : [c, r];
+        const label = `${name(v.mine[r])} v ${name(v.theirs[c])}`;
+        if (v.struck.includes(`${ar},${ac}`)) return btn(`✖ ${label}`.slice(0, 80), v.cellId(ar, ac), SECONDARY, true);
+        return btn(label.slice(0, 80), v.cellId(ar, ac), !myTurn ? SECONDARY : isPick ? SUCCESS : DANGER, !myTurn);
+      }),
+    ),
+  );
+  return { body, rows };
 }
 
 /**
@@ -354,6 +460,8 @@ export async function renderMatchCard(fastify: FastifyInstance, matchId: string,
       player2_id: true,
       competitor_format: true,
       match_format: true,
+      pick_mode: true,
+      weekly_bans: true,
       games: {
         orderBy: { game_number: 'asc' },
         select: {
@@ -362,6 +470,8 @@ export async function renderMatchCard(fastify: FastifyInstance, matchId: string,
           status: true,
           battle_type: true,
           winner_id: true,
+          player1_faction_id: true,
+          player2_faction_id: true,
           lobby_code: true,
           lobby_password: true,
           reported_winner_id: true,
@@ -370,6 +480,7 @@ export async function renderMatchCard(fastify: FastifyInstance, matchId: string,
           verification: true,
           map_decision: { select: { picked_map_id: true } },
           blind_pick: true,
+          faction_matrix: true,
         },
       },
     },
@@ -460,18 +571,59 @@ export async function renderMatchCard(fastify: FastifyInstance, matchId: string,
     return msg(`${oppName} reported game ${current.game_number}, but the replay didn't match. Waiting for them to sort it out.`, [cancelRow]);
   }
 
+  const bansLine = weeklyBansLine(matchWeeklyBans(match.weekly_bans), viewerId, oppName, factionName);
+  const isMatrix = match.pick_mode === 'MATRIX';
+  const mx = current.faction_matrix;
+
+  if (isMatrix && !mx?.decided_at) {
+    // 3×3 matrix: both lock three blind, then strike in turns until the coin-toss winner picks.
+    const mine = mx ? (isP1 ? mx.p1_factions : mx.p2_factions) : [];
+    if (mx?.revealed_at) {
+      const grid = matrixGrid(
+        {
+          mine,
+          theirs: isP1 ? mx.p2_factions : mx.p1_factions,
+          struck: mx.bans,
+          viewerIsP1: isP1,
+          iAmTop: mx.top_player_id === viewerId,
+          oppName,
+          turnStartedAt: mx.last_action_at,
+          cellId: (r, c) => `mc_mx:${id}:${r}:${c}`,
+        },
+        (f) => factionName(f),
+      );
+      return msg(grid.body, [...grid.rows, cancelRow]);
+    }
+    const deadline = mx?.first_locked_at ? Math.floor(mx.first_locked_at.getTime() / 1000) + BLIND_PICK_TIMEOUT_SEC : null;
+    if (mx && (isP1 ? mx.p1_locked_at : mx.p2_locked_at)) {
+      const wait = deadline ? `\n${oppName} has until <t:${deadline}:R> to pick.` : '';
+      return msg(`🔒 Your three: ${mine.map((f) => `**${factionName(f)}**`).join(', ')}. Waiting for ${oppName}…${wait}`, [cancelRow]);
+    }
+    const timer = deadline ? `\n⏱ ${oppName} has picked. You have until <t:${deadline}:R>, or the match is cancelled.` : '';
+    const allowed = await allowedFactions(fastify, battleType, match.weekly_bans);
+    return msg(`${MATRIX_PICK_TEXT}${bansLine}${timer}`, [
+      ...matrixPickRows(`mc_mx3:${id}`, allowed, `${siteUrl()}/matches/${match.id}/decision`),
+      cancelRow,
+    ]);
+  }
+
   // Faction pick (blind): both lock, then both are revealed.
-  if (!bp?.revealed_at) {
+  if (!isMatrix && !bp?.revealed_at) {
     if (myLock) {
       const deadline = myLock && !oppLock ? `\n${oppName} has until <t:${Math.floor(myLock.getTime() / 1000) + BLIND_PICK_TIMEOUT_SEC}:R> to pick.` : '';
       return msg(`🔒 You picked **${factionName(myFaction)}**. Waiting for ${oppName}…${deadline}`, [cancelRow]);
     }
     const timer = oppLock ? `\n⏱ ${oppName} has picked. You have until <t:${Math.floor(oppLock.getTime() / 1000) + BLIND_PICK_TIMEOUT_SEC}:R>, or the match is cancelled.` : '';
-    return msg(`${PICK_TEXT}${timer}`, [...factionPickRows(`mc_pick:${id}`, await allowedFactions(fastify, battleType)), cancelRow]);
+    return msg(`${PICK_TEXT}${bansLine}${timer}`, [...factionPickRows(`mc_pick:${id}`, await allowedFactions(fastify, battleType, match.weekly_bans)), cancelRow]);
   }
 
-  // Revealed, not reported yet: lobby + result.
-  return msg(playText(factionName(myFaction), oppName, factionName(oppFaction), current.lobby_code, current.lobby_password), [
+  // Revealed (or the matrix decided), not reported yet: lobby + result. The matrix writes the factions onto the game.
+  const [mine, theirs] = isMatrix
+    ? isP1
+      ? [current.player1_faction_id, current.player2_faction_id]
+      : [current.player2_faction_id, current.player1_faction_id]
+    : [myFaction, oppFaction];
+  return msg(playText(factionName(mine), oppName, factionName(theirs), current.lobby_code, current.lobby_password), [
     playRow('mc', `:${id}`, !!current.lobby_code),
     cancelRow,
   ]);
@@ -581,6 +733,10 @@ export interface PreviewState {
   result?: 'w' | 'l';
   /** What the uploaded replay showed, for the "match over" step. */
   replay?: string;
+  /** The 3×3 matrix variant (a Bo3 in Land Battle or Conquest), with the player as player 1. */
+  variant?: 'matrix';
+  /** Matrix variant: both threes, the struck cells ("row,col", rows = the player's three) and the coin toss. */
+  mx?: { mine: string[]; theirs: string[]; struck: string[]; iAmTop: boolean };
 }
 
 export async function getPreviewState(fastify: FastifyInstance, userId: string): Promise<PreviewState | null> {
@@ -594,11 +750,51 @@ export async function savePreviewState(fastify: FastifyInstance, userId: string,
   return renderPreviewCard(fastify, s);
 }
 
-/** A fresh preview: the first battle type of the queue on a random map of it, nothing picked yet. */
-async function newPreviewState(fastify: FastifyInstance): Promise<PreviewState> {
-  const battleType = ALL_BATTLE_TYPES[0]!;
+/** A fresh preview on a random map, nothing picked yet: the queue's first battle type, or Conquest for the matrix. */
+async function newPreviewState(fastify: FastifyInstance, variant?: 'matrix'): Promise<PreviewState> {
+  const battleType: QueueBattleType = variant === 'matrix' ? 'CONQUEST' : ALL_BATTLE_TYPES[0]!;
   const maps = await fastify.prisma.map.findMany({ where: { battle_type: battleType, available: true, deleted_at: null }, select: { name: true } });
-  return { battleType, mapName: maps.length ? maps[Math.floor(Math.random() * maps.length)]!.name : null };
+  return { battleType, mapName: maps.length ? maps[Math.floor(Math.random() * maps.length)]!.name : null, ...(variant ? { variant } : {}) };
+}
+
+/** Matrix preview: the matchup in a cell becomes the factions both play. */
+function pickPreviewCell(s: PreviewState, cell: string): PreviewState {
+  const [r, c] = cell.split(',').map(Number);
+  return { ...s, myFaction: s.mx!.mine[r!], rivalFaction: s.mx!.theirs[c!] };
+}
+
+/** Matrix preview: RizzBOTto strikes while it is his turn, and picks at the end when he won the coin toss. */
+function previewBotTurns(s: PreviewState): PreviewState {
+  let mx = s.mx!;
+  for (;;) {
+    const strikes = mx.struck.length;
+    if ((strikes >= 7 || STRIKE_BY_TOP[strikes]!) === mx.iAmTop) return { ...s, mx };
+    const open = MATRIX_CELLS.filter((cell) => !mx.struck.includes(cell));
+    const cell = open[Math.floor(Math.random() * open.length)]!;
+    if (strikes >= 7) return pickPreviewCell({ ...s, mx }, cell);
+    mx = { ...mx, struck: [...mx.struck, cell] };
+  }
+}
+
+/** Matrix preview: the player locked three; RizzBOTto names three at random, the coin is tossed. */
+export async function lockPreviewThree(fastify: FastifyInstance, userId: string, s: PreviewState, three: string[]): Promise<DiscordMessage> {
+  const pool = (await allowedFactions(fastify, s.battleType)).map((f) => f.id);
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+  }
+  const next = previewBotTurns({ ...s, mx: { mine: three, theirs: pool.slice(0, 3), struck: [], iAmTop: Math.random() < 0.5 } });
+  return savePreviewState(fastify, userId, next);
+}
+
+/** Matrix preview: the player struck (or, last, picked) a cell; RizzBOTto takes his turns at once. */
+export async function strikePreviewCell(fastify: FastifyInstance, userId: string, s: PreviewState, cell: string): Promise<DiscordMessage> {
+  const mx = s.mx;
+  if (!mx || s.myFaction || !MATRIX_CELLS.includes(cell) || mx.struck.includes(cell)) return renderPreviewCard(fastify, s);
+  const strikes = mx.struck.length;
+  if ((strikes >= 7 || STRIKE_BY_TOP[strikes]!) !== mx.iAmTop) return renderPreviewCard(fastify, s);
+  const next = strikes >= 7 ? pickPreviewCell(s, cell) : previewBotTurns({ ...s, mx: { ...mx, struck: [...mx.struck, cell] } });
+  return savePreviewState(fastify, userId, next);
 }
 
 /** The player picked: RizzBOTto picks at once (any allowed faction), and both are revealed. */
@@ -608,8 +804,8 @@ export async function pickPreviewFactions(fastify: FastifyInstance, userId: stri
   return savePreviewState(fastify, userId, { ...s, myFaction: factionId, rivalFaction: rival });
 }
 
-export async function restartPreview(fastify: FastifyInstance, userId: string): Promise<DiscordMessage> {
-  return savePreviewState(fastify, userId, await newPreviewState(fastify));
+export async function restartPreview(fastify: FastifyInstance, userId: string, variant?: 'matrix'): Promise<DiscordMessage> {
+  return savePreviewState(fastify, userId, await newPreviewState(fastify, variant));
 }
 
 /** One line on what a replay file shows: players with their factions, map, when it was recorded. */
@@ -625,17 +821,32 @@ export async function describeReplay(fastify: FastifyInstance, file: Buffer): Pr
 }
 
 export async function renderPreviewCard(fastify: FastifyInstance, s: PreviewState): Promise<DiscordMessage> {
-  const header = `-# 🧪 Preview: not a real match. ${PREVIEW_RIVAL} plays the other side.\n${cardHeader(`**${PREVIEW_RIVAL}**`, s.battleType, 'BO1')}`;
+  const isMatrix = s.variant === 'matrix';
+  const header =
+    `-# 🧪 Preview: not a real match. ${PREVIEW_RIVAL} plays the other side.\n` +
+    (isMatrix ? cardHeader(`**${PREVIEW_RIVAL}**`, s.battleType, 'BO3', ' · Game 1 of 3 · 0–0') : cardHeader(`**${PREVIEW_RIVAL}**`, s.battleType, 'BO1'));
   const mapLine = s.mapName ? `\n🗺️ Map: **${s.mapName}**` : '';
   const siteLink = linkBtn('Open on rizzotto.gg', `${siteUrl()}/open-play`);
   const cancelRow = row(btn('Cancel match', 'pv_cancel', DANGER), siteLink);
   const msg = (body: string, components: object[]): DiscordMessage => ({ content: `${header}${mapLine}\n\n${body}`, components, allowed_mentions: noMentions });
 
   if (s.result) {
-    const result = s.result === 'w' ? 'You won 1–0. GG!' : `${PREVIEW_RIVAL} won 1–0. GG!`;
-    return msg(`**Match over.** ${result}${s.replay ? `\n\n${s.replay}` : ''}`, [
+    const result = isMatrix
+      ? '**Game 1 reported.** In a real Bo3 the card now moves on to game 2, with a new map and a new matrix.'
+      : `**Match over.** ${s.result === 'w' ? 'You won 1–0. GG!' : `${PREVIEW_RIVAL} won 1–0. GG!`}`;
+    return msg(`${result}${s.replay ? `\n\n${s.replay}` : ''}`, [
       row(btn('Find another game', 'jp_find', PRIMARY), btn('Start the preview again', 'pv_again'), siteLink),
     ]);
+  }
+  if (isMatrix && !s.myFaction) {
+    if (!s.mx) return msg(MATRIX_PICK_TEXT, [...matrixPickRows('pv_mx3', await allowedFactions(fastify, s.battleType), `${siteUrl()}/open-play`), cancelRow]);
+    const ids = [...s.mx.mine, ...s.mx.theirs];
+    const names = await fastify.prisma.faction.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
+    const grid = matrixGrid(
+      { ...s.mx, viewerIsP1: true, oppName: PREVIEW_RIVAL, turnStartedAt: null, cellId: (r, c) => `pv_mx:${r}:${c}` },
+      (id) => names.find((f) => f.id === id)?.name ?? 'unknown',
+    );
+    return msg(grid.body, [...grid.rows, cancelRow]);
   }
   if (!s.myFaction) return msg(PICK_TEXT, [...factionPickRows('pv_pick', await allowedFactions(fastify, s.battleType)), cancelRow]);
   const factions = await fastify.prisma.faction.findMany({ where: { id: { in: [s.myFaction, s.rivalFaction ?? ''] } }, select: { id: true, name: true } });
@@ -647,9 +858,13 @@ export async function renderPreviewCard(fastify: FastifyInstance, s: PreviewStat
 }
 
 /** DM a fresh preview card to a player (an admin, from the admin panel). */
-export async function sendPreviewCard(fastify: FastifyInstance, user: { id: string; discord_id: string }): Promise<'sent' | 'closed' | 'failed'> {
+export async function sendPreviewCard(
+  fastify: FastifyInstance,
+  user: { id: string; discord_id: string },
+  variant?: 'matrix',
+): Promise<'sent' | 'closed' | 'failed'> {
   if (!isBotConfigured() || !fastify.redis) return 'failed';
-  const posted = await postDm(user.discord_id, await restartPreview(fastify, user.id));
+  const posted = await postDm(user.discord_id, await restartPreview(fastify, user.id, variant));
   return posted === 'closed' ? 'closed' : posted ? 'sent' : 'failed';
 }
 

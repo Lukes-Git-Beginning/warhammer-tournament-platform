@@ -10,6 +10,7 @@ import {
   describeReplay,
   getPreviewState,
   lobbyModal,
+  lockPreviewThree,
   pickPreviewFactions,
   refreshMatchCards,
   rememberCardRender,
@@ -22,6 +23,7 @@ import {
   restartPreview,
   savePreviewState,
   sendJoinDm,
+  strikePreviewCell,
   syncTicker,
   type DiscordMessage,
 } from './discord-open-play.js';
@@ -30,6 +32,7 @@ import { claimQueueOffer } from './queue-offer.js';
 import { logDiscordClick } from './queue-activity.js';
 import { ALL_BATTLE_TYPES, ALL_QUEUE_MATCH_FORMATS, decodeOffer, type QueueBattleType, type QueueMatchFormat } from './queue-matching.js';
 import { getStoredQueuePrefs, saveQueuePrefs } from './queue-prefs.js';
+import { setWeeklyBan } from './weekly-ban.js';
 
 // Mirrors the multipart file limit in app.ts (5 MB).
 const REPLAY_MAX_BYTES = 5 * 1024 * 1024;
@@ -170,8 +173,22 @@ function startJoin(fastify: FastifyInstance, i: Interaction, discordId: string, 
 const BATTLE_TYPES = ALL_BATTLE_TYPES as readonly string[];
 const MATCH_FORMATS = ALL_QUEUE_MATCH_FORMATS as readonly string[];
 
-async function handleJoinDm(fastify: FastifyInstance, i: Interaction, userId: string, action: string) {
+async function handleJoinDm(fastify: FastifyInstance, i: Interaction, userId: string, action: string, parts: string[]) {
   const values = i.data?.values ?? [];
+
+  // The weekly ban: choosing one asks first (it locks for 7 days), then it is set.
+  if (action === 'oq_ban') return update(await renderJoinDm(fastify, userId, undefined, values[0]));
+  if (action === 'oq_banno') return update(await renderJoinDm(fastify, userId));
+  if (action === 'oq_banok') {
+    const result = await setWeeklyBan(fastify.prisma, userId, parts[0] ?? null);
+    const note = result.ok
+      ? '✅ Your weekly ban is set.'
+      : result.reason === 'locked'
+        ? `Your weekly ban can change again <t:${Math.floor(result.opensAt.getTime() / 1000)}:R>.`
+        : 'That faction is unknown.';
+    return update(await renderJoinDm(fastify, userId, note));
+  }
+
   if (action === 'oq_bt' || action === 'oq_fmt' || action === 'oq_size' || action === 'oq_team') {
     const stored = await getStoredQueuePrefs(fastify.prisma, userId);
     if (action === 'oq_bt') {
@@ -298,6 +315,13 @@ async function handleMatchCard(fastify: FastifyInstance, i: Interaction, userId:
       if (!factionId) return ephemeral('Pick a faction.');
       return act('POST', `/api/matches/${matchId}/decision/blind-pick/lock`, { faction_id: factionId });
     }
+    case 'mc_mx3': {
+      const three = i.data?.values ?? [];
+      if (three.length !== 3) return ephemeral('Pick 3 factions.');
+      return act('POST', `/api/matches/${matchId}/matrix/lock`, { factions: three });
+    }
+    case 'mc_mx':
+      return act('POST', `/api/matches/${matchId}/matrix/ban`, { row: Number(extra), col: Number(parts[3]) });
     case 'mc_lobby': {
       const game = await fastify.prisma.matchGame.findFirst({
         where: { match_id: matchId, game_number: gameNumber },
@@ -421,8 +445,15 @@ async function handlePreview(fastify: FastifyInstance, i: Interaction, userId: s
     }
     case 'pv_cancel':
       return ephemeral('On a real card this asks you to confirm, then cancels the match. A game that already has a reported result keeps it.');
+    case 'pv_mx3': {
+      const three = i.data?.values ?? [];
+      if (three.length !== 3) return ephemeral('Pick 3 factions.');
+      return update(await lockPreviewThree(fastify, userId, s, three));
+    }
+    case 'pv_mx':
+      return update(await strikePreviewCell(fastify, userId, s, `${parts[0]},${parts[1]}`));
     case 'pv_again':
-      return update(await restartPreview(fastify, userId));
+      return update(await restartPreview(fastify, userId, s.variant));
   }
   return null;
 }
@@ -460,7 +491,7 @@ export async function handleOpenPlayInteraction(fastify: FastifyInstance, i: Int
 
   if (action.startsWith('pv_')) return handlePreview(fastify, i, user.id, action, parts);
   if (i.type === MODAL_SUBMIT) return handleModal(fastify, i, user.id, action, parts);
-  if (action.startsWith('oq_')) return handleJoinDm(fastify, i, user.id, action);
+  if (action.startsWith('oq_')) return handleJoinDm(fastify, i, user.id, action, parts);
   return handleMatchCard(fastify, i, user.id, action, parts);
 }
 

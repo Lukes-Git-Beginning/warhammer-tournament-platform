@@ -2072,9 +2072,9 @@ export function putDiscordOpenPlayRollout(
   });
 }
 
-/** DM the signed-in admin a preview match card (every step clickable, no real match). */
-export function postDiscordPreviewCard(): Promise<{ sent: true }> {
-  return apiFetch('/api/admin/discord-open-play/preview-card', { method: 'POST', body: JSON.stringify({}) });
+/** DM the signed-in admin a preview match card (every step clickable, no real match); 'matrix' = the 3×3 matrix one. */
+export function postDiscordPreviewCard(variant?: 'matrix'): Promise<{ sent: true }> {
+  return apiFetch('/api/admin/discord-open-play/preview-card', { method: 'POST', body: JSON.stringify(variant ? { variant } : {}) });
 }
 
 // ---------------------------------------------------------------------------

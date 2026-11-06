@@ -1,7 +1,8 @@
 # Discord Open Play: `/join`, ticker, matches in DMs (Vermin League merge)
 
-Status: steps 1–3 below **deployed** (v2.29.0 on 2026-11-01, join sources v2.30.0). Next: VL picking (§11), planned
-2026-11-06, not built yet. Decisions below are Alex's; open points are marked.
+Status: steps 1–3 below **deployed** (v2.29.0 on 2026-11-01, join sources v2.30.0). VL picking (§11) **built**
+2026-11-06 on `feat/open-play-vl-picking` (v3.1.0), the series timeout fix on `fix/open-play-series-pick-timeout`
+(v3.0.3); neither deployed yet. Decisions below are Alex's; open points are marked.
 
 **Rollout (Alex 2026-10-31: test it in a hidden channel first).** The deploy ships in testing mode (AdminConfig
 `discord_open_play_rollout = { live, testerDiscordIds }`, default not live), so the community sees nothing:

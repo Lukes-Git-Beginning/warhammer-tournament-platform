@@ -163,7 +163,7 @@ describe('join DM', () => {
   it('shows the queue settings like the site, preset from the stored settings', async () => {
     const u = await player('dop_render');
     const dm = await renderJoinDm(app, u.id);
-    expect(customIds(dm.components)).toEqual(['oq_bt', 'oq_fmt', 'oq_size', 'oq_join']);
+    expect(customIds(dm.components)).toEqual(['oq_bt', 'oq_fmt', 'oq_size', 'oq_ban', 'oq_join']);
     const bt = flat(dm.components).find((c) => c.custom_id === 'oq_bt')!;
     expect(bt.options!.every((o) => o.default)).toBe(true); // defaults: every battle type
   });
@@ -188,6 +188,22 @@ describe('join DM', () => {
     expect(pref?.battle_types).toEqual(['CONQUEST', 'LAND_BATTLE']);
     const bt = flat(res.data.components).find((c) => c.custom_id === 'oq_bt')!;
     expect(bt.options!.filter((o) => o.default).map((o) => o.value)).toEqual(['CONQUEST', 'LAND_BATTLE']);
+  });
+
+  it('sets the weekly ban after asking, then shows it locked for 7 days', async () => {
+    const u = await player('dop_ban');
+    const faction = await prisma.faction.findFirstOrThrow({ orderBy: { name: 'asc' }, select: { id: true, name: true } });
+    type Res = { type: number; data: { content: string; components: object[] } };
+    const ask = (await handleOpenPlayInteraction(app, interaction(u, 3, { custom_id: 'oq_ban', values: [faction.id] }))) as Res;
+    expect(ask.data.content).toContain(`Make ${faction.name} your weekly ban?`);
+    expect(customIds(ask.data.components)).toEqual([`oq_banok:${faction.id}`, 'oq_banno']);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: u.id } })).weekly_ban_faction_id).toBeNull();
+
+    const done = (await handleOpenPlayInteraction(app, interaction(u, 3, { custom_id: `oq_banok:${faction.id}` }))) as Res;
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: u.id } })).weekly_ban_faction_id).toBe(faction.id);
+    expect(done.data.content).toContain(`Weekly ban: **${faction.name}**`);
+    expect(done.data.content).toContain('You can change it <t:');
+    expect(customIds(done.data.components)).not.toContain('oq_ban');
   });
 
   it('2v2 without a team: Join is disabled', async () => {
@@ -395,6 +411,71 @@ describe('match card', () => {
     expect(reported.replay_url).toMatch(/^\/uploads\/replays\//);
   });
 
+  it('a Bo3 in Conquest runs the 3x3 matrix: pick three, strike in turns, then play', async () => {
+    const a = await player('dop_mx_a');
+    const b = await player('dop_mx_b');
+    const banned = (await prisma.faction.findFirstOrThrow({ where: { id: { not: 'undead_legions' } }, orderBy: { name: 'asc' }, select: { id: true } })).id;
+    await prisma.user.update({ where: { id: a.id }, data: { weekly_ban_faction_id: banned, weekly_ban_set_at: new Date() } });
+    const { matchId } = await createOpenPlayMatch(prisma, a.id, b.id, 'QUEUE', 'CONQUEST', 'ONE_V_ONE', 'BO3');
+
+    const start = (await renderMatchCard(app, matchId, b.id))!;
+    expect(start.content).toContain('Pick 3 factions');
+    expect(start.content).toContain('Weekly bans:');
+    const pick = flat(start.components)[0] as unknown as { custom_id: string; min_values?: number; max_values?: number; options: { value: string }[] };
+    expect([pick.custom_id, pick.min_values, pick.max_values]).toEqual([`mc_mx3:${matchId}:1`, 3, 3]);
+    expect(pick.options.map((o) => o.value)).not.toContain(banned);
+    const ids = pick.options.map((o) => o.value);
+
+    const sides: [TestUser, string[], string][] = [[a, ids.slice(0, 3), 'card-a'], [b, ids.slice(3, 6), 'card-b']];
+    for (const [u, three, msgId] of sides) {
+      const lock = interaction(u, 3, { custom_id: `mc_mx3:${matchId}:1`, values: three }, { id: msgId, channel_id: `dm-${u.discord_id}` });
+      await handleOpenPlayInteraction(app, lock);
+      await waitForWebhook(lock.token);
+    }
+
+    const matrix = await prisma.matchFactionMatrix.findFirstOrThrow({ where: { game: { match_id: matchId } } });
+    expect(matrix.revealed_at).not.toBeNull();
+    const top = matrix.top_player_id === a.id ? a : b;
+    const bottom = top === a ? b : a;
+    const topCard = (await renderMatchCard(app, matchId, top.id))!;
+    const bottomCard = (await renderMatchCard(app, matchId, bottom.id))!;
+    expect(topCard.content).toContain('**Your turn:** strike one matchup');
+    expect(bottomCard.content).toContain('is striking');
+    const cells = (card: { components: object[] }) => flat(card.components).filter((c) => c.custom_id?.startsWith('mc_mx:'));
+    expect(cells(topCard)).toHaveLength(9);
+    expect(cells(topCard).every((c) => !c.disabled)).toBe(true);
+    expect(cells(bottomCard).every((c) => c.disabled)).toBe(true);
+
+    // The top player strikes from his card; the cell's id carries the match's own coordinates.
+    const cellId = cells(topCard)[1]!.custom_id!;
+    const strike = interaction(top, 3, { custom_id: cellId }, { id: 'card-top', channel_id: `dm-${top.discord_id}` });
+    await handleOpenPlayInteraction(app, strike);
+    await waitForWebhook(strike.token);
+    const [, , , r, c] = cellId.split(':');
+    expect((await prisma.matchFactionMatrix.findFirstOrThrow({ where: { game_id: matrix.game_id } })).bans).toEqual([`${r},${c}`]);
+    const bottomTurn = (await renderMatchCard(app, matchId, bottom.id))!;
+    expect(bottomTurn.content).toContain('**Your turn:** strike 2 matchups');
+    expect(cells(bottomTurn).filter((x) => x.disabled)).toHaveLength(1);
+
+    // Finish the strikes and the pick, then the card moves on to lobby and result.
+    const order = [bottom, bottom, top, top, bottom, bottom, top];
+    for (const u of order) {
+      const m = await prisma.matchFactionMatrix.findFirstOrThrow({ where: { game_id: matrix.game_id } });
+      const open = ['0,0', '0,1', '0,2', '1,0', '1,1', '1,2', '2,0', '2,1', '2,2'].find((x) => !m.bans.includes(x))!;
+      const [row, col] = open.split(',').map(Number);
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/matches/${matchId}/matrix/ban`,
+        cookies: { auth_token: app.jwt.sign({ sub: u.id, username: 'x', role: 'USER' }) },
+        payload: { row, col },
+      });
+      expect(res.statusCode).toBe(200);
+    }
+    const play = (await renderMatchCard(app, matchId, a.id))!;
+    expect(customIds(play.components)).toEqual([`mc_lobby:${matchId}:1`, `mc_won:${matchId}:1`, `mc_lost:${matchId}:1`, `mc_cancel:${matchId}`]);
+    expect(play.content).not.toContain('**unknown**');
+  });
+
   it('a non-replay attachment is refused before anything is reported', async () => {
     const { a, matchId } = await match();
     const report = interaction(a, 5, {
@@ -459,6 +540,30 @@ describe('preview card', () => {
     expect(done).toContain('No players could be read from this file');
     expect(calls.some((c) => c.url === 'https://cdn.test/battle.replay')).toBe(true);
 
+    expect(await prisma.match.count({ where: { OR: [{ player1_id: u.id }, { player2_id: u.id }] } })).toBe(0);
+    await app.redis.del(`rizzotto:dop:preview:${u.id}`);
+  });
+
+  it('the matrix preview: pick three, strike against RizzBOTto, then the play step', async () => {
+    const u = await player('dop_preview_mx');
+    expect(await sendPreviewCard(app, u, 'matrix')).toBe('sent');
+    const start = dmPosts(u)[0]!.body as { content: string; components: object[] };
+    expect(start.content).toContain('Conquest');
+    expect(start.content).toContain('Pick 3 factions');
+    const pick = flat(start.components)[0] as unknown as { custom_id: string; options: { value: string }[] };
+    expect(pick.custom_id).toBe('pv_mx3');
+
+    const msg = { id: 'pv-mx', channel_id: `dm-${u.discord_id}` };
+    const three = pick.options.slice(0, 3).map((o) => o.value);
+    let card = (await handleOpenPlayInteraction(app, interaction(u, 3, { custom_id: 'pv_mx3', values: three }, msg))) as Response;
+    expect(card.data.content).toContain('Coin toss');
+    // Strike (or, last, pick) whatever is open on the player's turn until the matchup stands.
+    for (let n = 0; n < 9 && !customIds(card.data.components).includes('pv_lobby'); n++) {
+      const open = flat(card.data.components).find((c) => c.custom_id?.startsWith('pv_mx:') && !c.disabled);
+      expect(open).toBeDefined();
+      card = (await handleOpenPlayInteraction(app, interaction(u, 3, { custom_id: open!.custom_id! }, msg))) as Response;
+    }
+    expect(customIds(card.data.components)).toEqual(['pv_lobby', 'pv_won', 'pv_lost', 'pv_cancel']);
     expect(await prisma.match.count({ where: { OR: [{ player1_id: u.id }, { player2_id: u.id }] } })).toBe(0);
     await app.redis.del(`rizzotto:dop:preview:${u.id}`);
   });
