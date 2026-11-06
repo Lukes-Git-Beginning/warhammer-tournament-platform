@@ -1,7 +1,7 @@
 # Discord Open Play: `/join`, ticker, matches in DMs (Vermin League merge)
 
-Status: **BUILT for 1v1, not deployed** (2026-10-31): steps 1–3 below, tested with a stubbed Discord API. Next:
-deploy on Alex's go, then the live test on RizzOttoverse (step 4). Decisions below are Alex's; open points are marked.
+Status: steps 1–3 below **deployed** (v2.29.0 on 2026-11-01, join sources v2.30.0). Next: VL picking (§11), planned
+2026-11-06, not built yet. Decisions below are Alex's; open points are marked.
 
 **Rollout (Alex 2026-10-31: test it in a hidden channel first).** The deploy ships in testing mode (AdminConfig
 `discord_open_play_rollout = { live, testerDiscordIds }`, default not live), so the community sees nothing:
@@ -175,11 +175,88 @@ and what it led to (DM sent, setup link, match, too late, other). A join DM coun
 queue, so ticker and availability clicks only show as clicks. Discord tells a bot nothing about who merely reads a
 channel, so views can't be measured.
 
+### 11. VL picking (Alex with Humanboy, 2026-11-06)
+
+**Decided:**
+
+1. **Bo3 in Land Battle and Conquest: 3×3 matrix**, as in Matrix tournaments: both name three factions blind, then
+   cells are struck in the grid until one matchup is left. Anew before every game of the series. Reuses the MATRIX
+   code.
+2. **Bo1 stays as today** (random map, blind pick).
+3. **Weekly ban on the player profile.** Each player sets one faction there and can change it 7 days later at the
+   earliest. In every Open Play match of his, that faction is banned for both players, so up to two per match. The
+   ban lives on the profile, not per match or game.
+4. The VL's pick 3 / ban 1 and its 2 preset bans per player **don't come**.
+5. **No VL extra limits:** the Fruit Rules are enough (the VL didn't bring it up again after the call).
+
+**Clarified with Alex (2026-11-06):**
+
+6. Bo3 in Domination and Domquest stays blind pick; the matrix only in Land Battle and Conquest.
+7. The profile ban applies everywhere in Open Play: every battle type, Bo1 as Bo3, and in 2v2 the bans of all four
+   players. In the matrix nobody may put a banned faction among his three.
+8. No per-game bans in Open Play, only the lasting ban from the profile. Tournaments keep their 0–2 per-game bans
+   (Blind Pick, 3×3).
+9. Matrix timers: the three picks 5 minutes as Open Play's pick today (then cancelled, strike for whoever hasn't
+   picked); 30 s per strike and for the final pick, then a random one, as in Matrix tournaments.
+
+**Fix first (live bug, found while mapping this):** in an Open Play series (Bo3, Siege Bo2) the pick timeout anchors
+"neither has picked yet" at the *match's* creation. So game 2's blind pick qualifies at the first cron tick after the
+game is created: the match is cancelled and both players get a no-show strike, unless one of them picked within that
+minute. Both series on prod that reached a game 2 survived by luck (Conquest Bo3 2026-10-13: first pick 19 s after the
+game was created; Siege Bo2 2026-10-11: 47 s). Fix: anchor at the game's creation (`MatchGame.created_at`). The
+matrix is Bo3 only, so it needs this; it can also ship alone.
+
+**Matrix in Open Play:**
+
+- `Match.pick_mode` (TournamentMode, null = blind pick as today), stamped by `createOpenPlayMatch`: MATRIX for a 1v1
+  Bo3 in Land Battle or Conquest. Stamped, not derived, so a later rule change never flips running or past matches.
+- One helper, `factionPickMode(match)` = the tournament's mode, else `pick_mode`, else BPT / BPT_2V2. It replaces the
+  `match.tournament?.mode` reads in the matrix routes (lock, strike), `finalizeGameResult`, the report gate
+  (`isFactionStepDone`), the decision payload (`tournamentMode`) and the auto-resolve. The site's match page already
+  renders the matrix from `tournamentMode === 'MATRIX'`; the Open Play bans go in as its `gameBans`.
+- Next game of the series: random map as today, but no `MatchBlindPick`; the matrix row comes with the first lock,
+  as in tournaments.
+- No per-game bans in Open Play (`faction_bans_per_player` stays a tournament setting).
+- Timers (decision 9): `cancelOpenPlayNoShows` learns matrix rows (5 minutes for the three picks, then cancelled and a
+  strike for whoever hasn't picked). Strikes and the final pick keep the matrix's 30 s with a random strike. The
+  matrix's random-three fallback stays for tournaments.
+- The matrix auto-resolve runs outside a request, so after an automatic strike it refreshes both DM cards itself
+  (the per-minute reconcile is too slow for 30 s turns). `/api/me/pending-faction-picks` learns matrix picks.
+- Queue settings (site and join DM): one line that Bo3 in Land Battle and Conquest is played with the matrix.
+
+**Matrix on the DM card** (through the site's own routes via `callAsUser`, like the blind pick):
+
+- Three picks: one select with exactly 3 choices (25 factions today, minus the bans, so one select fits; if a DLC
+  pushes it past 25, the pick needs two steps).
+- Grid: his three as rows, the opponent's as columns, as 9 buttons in 3 rows ("Empire v Dwarfs"); struck cells
+  disabled with ✖. The player on turn gets live buttons and "Your turn: strike 2 · ⏱ ends <t:…:R>", the other
+  "Waiting for X". Last step: the coin-toss winner picks one of the two left. 3 grid rows + the cancel row = 4 of
+  Discord's 5 rows.
+- "Send me a preview card" gets a matrix variant, so it can be tried against RizzBOTto before anyone plays it.
+
+**Weekly ban:**
+
+- `User.weekly_ban_faction_id` + `User.weekly_ban_set_at`. `PUT /api/users/me/weekly-ban { factionId | null }`:
+  the first one any time, every change (clearing too) 7 days after the last one at the earliest; otherwise 409 with
+  the date it opens. An admin can reset it on the user view.
+- Snapshot onto the match at creation (`Match.weekly_bans`, `[{ userId, factionId }]`: two in 1v1, up to four in
+  2v2), so a series keeps its bans if one changes in between, and the match can say whose ban it was.
+- Enforcement: `openPlayBannedFactionIds(match)` already feeds the decision payload, the blind-pick lock and the DM
+  card's allowed factions; it also returns the snapshot bans. The matrix lock and the random picks use it too.
+- Own profile: "Weekly Open Play ban" with a faction select and "You can change it on <date>". Shown on every profile
+  (it shows in every match anyway). No ban set = nothing banned.
+- Match page and DM card: "Banned: Empire (A's weekly ban), Dwarfs (B's weekly ban)".
+- Join DM: shows the current ban, with a select while it is changeable (the VL players live in Discord).
+- Copy: Open Play page, How to Play, CHANGELOG.
+
+**Build order:** (1) the series timeout fix; (2) weekly ban; (3) matrix in Open Play on the site; (4) matrix on the
+DM card + preview; (5) copy, CHANGELOG. Each deploys on Alex's go; (1) can go first and alone.
+
 ## Open points
 
-- **VL picking:** does the VL need pick 3 / ban 1 and the 2 weekly global bans in Open Play? (A player also asked
-  for matrix picking as an option.)
-- **VL extra limits** on top of the Fruit Rules: list needed. They would go into the mod or the ruleset.
+- ~~**VL picking:** does the VL need pick 3 / ban 1 and the 2 weekly global bans in Open Play?~~ Decided
+  2026-11-06: matrix in Bo3 Land Battle and Conquest, a weekly ban on the profile, no pick 3 / ban 1 (§11).
+- ~~**VL extra limits** on top of the Fruit Rules~~ Decided 2026-11-06: none, the Fruit Rules are enough (§11).
 - Ticker: anonymous (current default, like the availability DM) or with the player's name.
 - To test on RizzOttoverse: `/join` in a channel where members may not send messages (Discord should only need
   "Use Application Commands"; the panel button works either way).
