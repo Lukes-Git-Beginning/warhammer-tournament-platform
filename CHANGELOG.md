@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [3.0.3] — 2026-11-06
+
+### Fixed
+- **Open Play series no longer end right after game 1.** In a Bo3 (and Siege's Bo2), game 2 could be cancelled within a minute of starting, with a strike for both of you, unless one of you picked a faction straight away. Each game now gets its full 5 minutes for the pick.
+
 ## [3.0.2] — 2026-11-04
 
 ### Fixed

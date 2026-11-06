@@ -200,8 +200,9 @@ async function autoResolveTournamentBlindPicks(fastify: FastifyInstance, cutoff:
  * queue-ghosting: 1st = warning, then 1h / 24h). A player who DID pick walks away with no penalty.
  *
  * The deadline is OPEN_PLAY_BLIND_PICK_TIMEOUT_MS after the FIRST lock when one player has picked
- * (matches the frontend countdown, which anchors to firstLockedAt), and after match creation when
- * NEITHER has picked (the total no-show fallback — no lock to anchor to).
+ * (matches the frontend countdown, which anchors to firstLockedAt), and after the GAME's creation when
+ * NEITHER has picked (the total no-show fallback — no lock to anchor to). Not the match's: a later
+ * game of a series is created when the one before it is confirmed, long after the match was.
  */
 async function cancelOpenPlayNoShows(fastify: FastifyInstance, cutoff: Date): Promise<number> {
   const stale = await fastify.prisma.matchBlindPick.findMany({
@@ -214,7 +215,7 @@ async function cancelOpenPlayNoShows(fastify: FastifyInstance, cutoff: Date): Pr
         {
           player1_locked_at: null,
           player2_locked_at: null,
-          game: { match: { created_at: { lt: cutoff } } },
+          game: { created_at: { lt: cutoff } },
         },
       ],
     },
