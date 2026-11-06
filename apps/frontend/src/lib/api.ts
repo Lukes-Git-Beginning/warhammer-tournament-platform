@@ -178,8 +178,10 @@ export interface MatchDecisionState {
   matchPlayer1Id?: string | null;
   restrictedFactions?: string[];
   factionAllowlist?: string[];
-  /** Open Play only: factions banned by the Standard Ruleset (not pickable). [] in tournaments. */
+  /** Open Play only: factions banned by the Standard Ruleset or a player's weekly ban (not pickable). [] in tournaments. */
   bannedFactions?: string[];
+  /** Open Play only: whose weekly ban is in force in this match, as it stood when the match began. */
+  weeklyBans?: { userId: string; username: string; factionId: string }[];
   // FREE_PICK: each player's registration choice — a fixed faction id, or null
   // for pick-later. Drives the per-match sub-flow (both fixed → play; both
   // pick-later → 3×3 matrix; mixed → mini-pick).
@@ -1456,6 +1458,27 @@ export function getAdminUserQueuePenalty(userId: string): Promise<QueuePenaltySt
 // Lifts any active cooldown and drops the player back to level 1 ("warned").
 export function liftAdminUserQueueCooldown(userId: string): Promise<{ ok: boolean }> {
   return apiFetch<{ ok: boolean }>(`/api/admin/users/${userId}/queue-penalty`, { method: 'DELETE' });
+}
+
+// Weekly Open Play ban: one faction banned for both sides in every Open Play match of its player; changeable 7 days
+// after the last change. opensAt = when it can change again (null = now).
+export interface WeeklyBanState {
+  factionId: string | null;
+  setAt: string | null;
+  opensAt: string | null;
+}
+
+export function getWeeklyBan(userId: string): Promise<WeeklyBanState> {
+  return apiFetch<WeeklyBanState>(`/api/users/${userId}/weekly-ban`);
+}
+
+export function setWeeklyBan(factionId: string | null): Promise<WeeklyBanState> {
+  return apiFetch<WeeklyBanState>('/api/users/me/weekly-ban', { method: 'PUT', body: JSON.stringify({ factionId }) });
+}
+
+// Admin: clears a player's weekly ban and its lock.
+export function resetAdminUserWeeklyBan(userId: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(`/api/admin/users/${userId}/weekly-ban`, { method: 'DELETE' });
 }
 
 export function getAdminStats(): Promise<AdminStats> {
@@ -2873,8 +2896,8 @@ export interface GameDto {
   pickedFactions?: { player1FactionId: string | null; player2FactionId: string | null } | null;
 }
 
-export function getMatchGames(matchId: string): Promise<{ games: GameDto[]; player1Id: string | null; player2Id: string | null; withdrawnPlayerId: string | null }> {
-  return apiFetch<{ games: GameDto[]; player1Id: string | null; player2Id: string | null; withdrawnPlayerId: string | null }>(`/api/matches/${matchId}/games`);
+export function getMatchGames(matchId: string): Promise<{ games: GameDto[]; player1Id: string | null; player2Id: string | null; withdrawnPlayerId: string | null; pickMode?: string | null }> {
+  return apiFetch<{ games: GameDto[]; player1Id: string | null; player2Id: string | null; withdrawnPlayerId: string | null; pickMode?: string | null }>(`/api/matches/${matchId}/games`);
 }
 
 /**

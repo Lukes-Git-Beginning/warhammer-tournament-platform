@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { randomBytes, randomInt } from 'node:crypto';
 import { ensureOneVThreeDecision } from '../lib/one-v-three.js';
 import { revealedBans } from '../lib/blind-pick-auto-resolve.js';
+import { openPlayBannedFactionIds } from '../lib/standard-ruleset.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -93,8 +94,13 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: matchId, deleted_at: null },
         select: {
           id: true,
+          status: true,
           player1_id: true,
           player2_id: true,
+          tournament_id: true,
+          competitor_format: true,
+          pick_mode: true,
+          weekly_bans: true,
           tournament: {
             select: {
               mode: true,
@@ -115,6 +121,7 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
             orderBy: { game_number: 'asc' },
             select: {
               id: true,
+              battle_type: true,
               faction_matrix: true,
               faction_ban: true,
             },
@@ -126,13 +133,18 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
       if (!match) {
         return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
       }
-      if (match.tournament?.mode !== 'MATRIX' && match.tournament?.mode !== 'FREE_PICK') {
+      // A tournament's mode, or an Open Play match stamped with the matrix (1v1 Bo3 in Land Battle / Conquest).
+      const mode = match.tournament?.mode ?? match.pick_mode;
+      if (mode !== 'MATRIX' && mode !== 'FREE_PICK') {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Match is not in a faction-matrix mode', statusCode: 422 });
+      }
+      if (!match.tournament && match.status !== 'ONGOING') {
+        return reply.code(409).send({ error: 'Conflict', message: 'This match is over', statusCode: 409 });
       }
 
       // 3×3 with faction bans: the ban step comes first, and neither side may put a banned faction
       // into their three.
-      if (match.tournament.mode === 'MATRIX' && match.tournament.faction_bans_per_player > 0) {
+      if (match.tournament?.mode === 'MATRIX' && match.tournament.faction_bans_per_player > 0) {
         const banRow = match.games[0]?.faction_ban ?? null;
         if (!banRow?.revealed_at) {
           return reply.code(422).send({
@@ -144,6 +156,27 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
         const banned = revealedBans(banRow);
         if (factions.some((f) => banned.includes(f))) {
           return reply.code(422).send({ error: 'UnprocessableEntity', message: 'One of these factions is banned for this game', statusCode: 422 });
+        }
+      }
+
+      // Open Play: three different factions, and the Standard Ruleset's bans and both players' weekly bans are out
+      // of everyone's three. (A tournament with a tiny pool may need repeats, so it isn't held to this.)
+      if (!match.tournament) {
+        if (new Set(factions).size !== 3) {
+          return reply.code(400).send({ error: 'BadRequest', message: 'Pick 3 different factions', statusCode: 400 });
+        }
+        const banned = await openPlayBannedFactionIds({
+          tournament_id: null,
+          competitor_format: match.competitor_format,
+          battle_type: match.games[0]?.battle_type,
+          weekly_bans: match.weekly_bans,
+        });
+        if (factions.some((f) => banned.includes(f))) {
+          return reply.code(422).send({ error: 'UnprocessableEntity', message: 'One of these factions is banned in this match', statusCode: 422 });
+        }
+        const known = await fastify.prisma.faction.count({ where: { id: { in: factions } } });
+        if (known !== 3) {
+          return reply.code(400).send({ error: 'BadRequest', message: 'Unknown faction', statusCode: 400 });
         }
       }
 
@@ -566,8 +599,10 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: matchId, deleted_at: null },
         select: {
           id: true,
+          status: true,
           player1_id: true,
           player2_id: true,
+          pick_mode: true,
           tournament: { select: { mode: true } },
           games: {
             where: {
@@ -590,8 +625,12 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
       if (!match) {
         return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
       }
-      if (match.tournament?.mode !== 'MATRIX' && match.tournament?.mode !== 'FREE_PICK') {
+      const mode = match.tournament?.mode ?? match.pick_mode;
+      if (mode !== 'MATRIX' && mode !== 'FREE_PICK') {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Match is not in a faction-matrix mode', statusCode: 422 });
+      }
+      if (!match.tournament && match.status !== 'ONGOING') {
+        return reply.code(409).send({ error: 'Conflict', message: 'This match is over', statusCode: 409 });
       }
 
       const isParticipant = actorId === match.player1_id || actorId === match.player2_id;

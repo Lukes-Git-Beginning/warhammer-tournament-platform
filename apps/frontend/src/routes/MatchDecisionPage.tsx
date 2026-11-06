@@ -527,8 +527,10 @@ interface BlindPickPhaseProps {
   pickedMapImageUrl?: string | null;
   restrictedFactions?: string[];
   factionAllowlist?: string[];
-  /** Open Play: factions banned by the Standard Ruleset — shown but not pickable. */
+  /** Open Play: factions banned by the Standard Ruleset or a weekly ban — shown but not pickable. */
   bannedFactions?: string[];
+  /** Open Play: the weekly bans among those, and whose they are. */
+  weeklyBans?: WeeklyBanEntry[];
   /** Blind Pick tournaments with faction bans: this game's revealed bans — unpickable for both. */
   gameBans?: string[];
   /** Whether the viewer may act (1v1 player / 2v2 captain). Teammates/spectators are read-only. */
@@ -545,10 +547,12 @@ function BlindPickPhase({
   restrictedFactions = [],
   factionAllowlist = [],
   bannedFactions = [],
+  weeklyBans = [],
   gameBans = [],
   canAct = true,
 }: BlindPickPhaseProps) {
   const queryClient = useQueryClient();
+  const weeklyNotes = weeklyBanNotes(weeklyBans, currentUserId);
   // 2v2 (BPT_2V2): the captain locks BOTH members' factions in one action (captain first,
   // then teammate). 1v1: a single pick.
   const is2v2 = decision.tournamentMode === 'BPT_2V2';
@@ -682,6 +686,7 @@ function BlindPickPhase({
                 <BlindPickCountdown
                   firstLockedAt={bp.firstLockedAt ?? null}
                   timeoutMs={decision.isOpenPlay ? 5 * 60 * 1000 : 2 * 60 * 1000}
+                  {...pickCountdownLabels(decision.isOpenPlay)}
                 />
               )}
               <button
@@ -713,6 +718,7 @@ function BlindPickPhase({
             <BlindPickCountdown
               firstLockedAt={bp.firstLockedAt}
               timeoutMs={decision.isOpenPlay ? 5 * 60 * 1000 : 2 * 60 * 1000}
+              {...pickCountdownLabels(decision.isOpenPlay)}
             />
           )}
         </div>
@@ -725,6 +731,7 @@ function BlindPickPhase({
           <BlindPickCountdown
             firstLockedAt={bp?.firstLockedAt ?? null}
             timeoutMs={decision.isOpenPlay ? 5 * 60 * 1000 : 2 * 60 * 1000}
+            {...pickCountdownLabels(decision.isOpenPlay)}
           />
         </div>
       ) : (
@@ -744,6 +751,9 @@ function BlindPickPhase({
           )}
 
           {gameBans.length > 0 && <GameBansSummary bans={gameBans} factions={factions} />}
+          {weeklyBans.length > 0 && (
+            <GameBansSummary bans={Object.keys(weeklyNotes)} factions={factions} label="Weekly bans" notes={weeklyNotes} />
+          )}
 
           <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-5">
             {factions.map(({ faction }) => {
@@ -761,6 +771,8 @@ function BlindPickPhase({
                 title={
                   isGameBan
                     ? 'Banned for this game'
+                    : weeklyNotes[faction.id]
+                    ? `Banned this match: ${weeklyNotes[faction.id]}`
                     : isBanned
                     ? 'Banned in Open Play by the Standard Ruleset'
                     : isDisabled
@@ -820,10 +832,34 @@ function BlindPickPhase({
 // ---------------------------------------------------------------------------
 
 /** This game's revealed bans, shown above the blind-pick grid. */
-function GameBansSummary({ bans, factions }: { bans: string[]; factions: FactionWithStatsDto[] }) {
+/** Open Play's weekly bans in force in this match, and whose each is. */
+type WeeklyBanEntry = { userId: string; username: string; factionId: string };
+
+/** "your" / "<name>'s" weekly ban, per weekly-banned faction, for the bans line and the tooltips. */
+function weeklyBanNotes(weeklyBans: WeeklyBanEntry[], viewerId: string): Record<string, string> {
+  const owners: Record<string, string[]> = {};
+  for (const b of weeklyBans) (owners[b.factionId] ??= []).push(b.userId === viewerId ? 'your' : `${b.username}'s`);
+  return Object.fromEntries(Object.entries(owners).map(([id, whose]) => [id, `${whose.join(', ')} weekly ban`]));
+}
+
+/** Countdown wording: a tournament auto-picks when the clock runs out, Open Play cancels the match. */
+const pickCountdownLabels = (isOpenPlay: boolean | undefined) =>
+  isOpenPlay ? { actionLabel: 'Match cancelled in', expiredLabel: 'Cancelling the match…' } : {};
+
+function GameBansSummary({
+  bans,
+  factions,
+  label = 'Banned this game',
+  notes = {},
+}: {
+  bans: string[];
+  factions: FactionWithStatsDto[];
+  label?: string;
+  notes?: Record<string, string>;
+}) {
   return (
     <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
-      <span className="uppercase tracking-widest text-rizzotto-stone-500">Banned this game</span>
+      <span className="uppercase tracking-widest text-rizzotto-stone-500">{label}</span>
       {bans.map((id) => {
         const f = factions.find((e) => e.faction.id === id)?.faction;
         return (
@@ -833,6 +869,7 @@ function GameBansSummary({ bans, factions }: { bans: string[]; factions: Faction
           >
             {f && <FactionBadge colorHex={f.color_hex} initials={f.initials} name={f.name} size="sm" iconUrl={f.icon_url} />}
             <span className="line-through decoration-red-500/70">{f?.name ?? id}</span>
+            {notes[id] && <span className="text-rizzotto-stone-500">· {notes[id]}</span>}
           </span>
         );
       })}
@@ -1034,10 +1071,17 @@ interface FactionMatrixPhaseProps {
   pickedMapImageUrl?: string | null;
   /** 3×3 with faction bans: this game's revealed bans — neither side may pick them into their three. */
   gameBans?: string[];
+  /** Open Play: the Standard Ruleset's and the weekly bans — out of everyone's three. */
+  bannedFactions?: string[];
+  /** Open Play: the weekly bans among those, and whose they are. */
+  weeklyBans?: WeeklyBanEntry[];
 }
 
-function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPlayer, colPlayer, restrictedFactions = [], factionAllowlist = [], pickedMapName = null, pickedMapImageUrl = null, gameBans = [] }: FactionMatrixPhaseProps) {
+function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPlayer, colPlayer, restrictedFactions = [], factionAllowlist = [], pickedMapName = null, pickedMapImageUrl = null, gameBans = [], bannedFactions = [], weeklyBans = [] }: FactionMatrixPhaseProps) {
   const queryClient = useQueryClient();
+  const weeklyNotes = weeklyBanNotes(weeklyBans, currentUserId);
+  // Tournaments: 2 min for the three picks, then random ones. Open Play: 5 min, then the match is cancelled.
+  const pickTimeoutMs = decision.isOpenPlay ? 5 * 60 * 1000 : 2 * 60 * 1000;
   const [selectedFactions, setSelectedFactions] = useState<string[]>([]);
   const [locking, setLocking] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
@@ -1109,7 +1153,12 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
   function pickRandom3() {
     const pool = factions
       .map((f) => f.faction.id)
-      .filter((id) => (factionAllowlist.length === 0 || factionAllowlist.includes(id)) && !gameBans.includes(id));
+      .filter(
+        (id) =>
+          (factionAllowlist.length === 0 || factionAllowlist.includes(id)) &&
+          !gameBans.includes(id) &&
+          !bannedFactions.includes(id),
+      );
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j]!, pool[i]!];
@@ -1198,7 +1247,7 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
       <div className="flex flex-col items-center gap-3 text-center">
         <span className="h-8 w-8 rounded-full border-2 border-rizzotto-gold-400 border-t-transparent animate-spin" />
         <p className="text-sm text-rizzotto-stone-400">Factions locked. Waiting for opponent…</p>
-        <BlindPickCountdown firstLockedAt={mx?.firstLockedAt ?? null} timeoutMs={2 * 60 * 1000} />
+        <BlindPickCountdown firstLockedAt={mx?.firstLockedAt ?? null} timeoutMs={pickTimeoutMs} {...pickCountdownLabels(decision.isOpenPlay)} />
         {mapBlock}
       </div>
     );
@@ -1357,10 +1406,13 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
       {mapBlock}
       {/* Show countdown if opponent already locked — this player is being timed */}
       {mx?.firstLockedAt && (
-        <BlindPickCountdown firstLockedAt={mx.firstLockedAt} timeoutMs={2 * 60 * 1000} />
+        <BlindPickCountdown firstLockedAt={mx.firstLockedAt} timeoutMs={pickTimeoutMs} {...pickCountdownLabels(decision.isOpenPlay)} />
       )}
 
       {gameBans.length > 0 && <GameBansSummary bans={gameBans} factions={factions} />}
+      {weeklyBans.length > 0 && (
+        <GameBansSummary bans={Object.keys(weeklyNotes)} factions={factions} label="Weekly bans" notes={weeklyNotes} />
+      )}
 
       <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-5">
         {factions.map(({ faction }) => {
@@ -1368,7 +1420,9 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
           // Restricted factions are nerfed, not banned — keep them pickable.
           const isRestricted = restrictedFactions.includes(faction.id);
           const isGameBan = gameBans.includes(faction.id);
-          const isBanned = isGameBan || (factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id));
+          const isOpenPlayBan = bannedFactions.includes(faction.id);
+          const isBanned =
+            isGameBan || isOpenPlayBan || (factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id));
           const isDisabled = isBanned || (!isSelected && selectedFactions.length >= 3);
           return (
             <button
@@ -1379,6 +1433,10 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
               title={
                 isGameBan
                   ? 'Banned for this game'
+                  : weeklyNotes[faction.id]
+                  ? `Banned this match: ${weeklyNotes[faction.id]}`
+                  : isOpenPlayBan
+                  ? 'Banned in Open Play by the Standard Ruleset'
                   : isRestricted && !isBanned
                     ? 'Restricted (nerfed) — does not count toward the leaderboard'
                     : undefined
@@ -2415,6 +2473,7 @@ export function MatchDecisionPage() {
                 restrictedFactions={decision.restrictedFactions ?? []}
                 factionAllowlist={decision.factionAllowlist ?? []}
                 bannedFactions={decision.bannedFactions ?? []}
+                weeklyBans={decision.weeklyBans ?? []}
                 gameBans={[
                   ...new Set([...(decision.factionBans?.player1Bans ?? []), ...(decision.factionBans?.player2Bans ?? [])]),
                 ]}
@@ -2445,6 +2504,8 @@ export function MatchDecisionPage() {
                 gameBans={[
                   ...new Set([...(decision.factionBans?.player1Bans ?? []), ...(decision.factionBans?.player2Bans ?? [])]),
                 ]}
+                bannedFactions={decision.bannedFactions ?? []}
+                weeklyBans={decision.weeklyBans ?? []}
               />
             </motion.div>
           )}

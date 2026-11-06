@@ -203,9 +203,10 @@ async function autoResolveTournamentBlindPicks(fastify: FastifyInstance, cutoff:
  * (matches the frontend countdown, which anchors to firstLockedAt), and after the GAME's creation when
  * NEITHER has picked (the total no-show fallback — no lock to anchor to). Not the match's: a later
  * game of a series is created when the one before it is confirmed, long after the match was.
+ * The 3×3 matrix's three picks count as the pick (its strikes have their own 30 s timer, matrix-auto-resolve.ts).
  */
 async function cancelOpenPlayNoShows(fastify: FastifyInstance, cutoff: Date): Promise<number> {
-  const stale = await fastify.prisma.matchBlindPick.findMany({
+  const blindPicks = await fastify.prisma.matchBlindPick.findMany({
     where: {
       revealed_at: null,
       game: { match: { type: 'OPEN_PLAY', status: 'ONGOING', deleted_at: null } },
@@ -236,12 +237,33 @@ async function cancelOpenPlayNoShows(fastify: FastifyInstance, cutoff: Date): Pr
     },
   });
 
+  // The 3×3 matrix (Open Play Bo3 in Land Battle / Conquest) follows the same rule for its three picks. Its row
+  // comes with the first lock, so "neither has picked" is a game without one.
+  const matrixGames = await fastify.prisma.matchGame.findMany({
+    where: {
+      status: 'PENDING',
+      match: { type: 'OPEN_PLAY', status: 'ONGOING', deleted_at: null, pick_mode: 'MATRIX' },
+      OR: [
+        { faction_matrix: null, created_at: { lt: cutoff } },
+        { faction_matrix: { revealed_at: null, first_locked_at: { lt: cutoff } } },
+      ],
+    },
+    select: {
+      faction_matrix: { select: { p1_locked_at: true, p2_locked_at: true } },
+      match: { select: { id: true, player1_id: true, player2_id: true } },
+    },
+  });
+
+  const stale = [
+    ...blindPicks.map((p) => ({ match: p.game.match, p1Picked: !!p.player1_locked_at, p2Picked: !!p.player2_locked_at })),
+    ...matrixGames.map((g) => ({ match: g.match, p1Picked: !!g.faction_matrix?.p1_locked_at, p2Picked: !!g.faction_matrix?.p2_locked_at })),
+  ];
   if (stale.length === 0) return 0;
 
   // Open Play is always 1v1, so the match slots are User ids — resolve them directly
   // (we need discord_id for the no-show penalty DMs).
   const playerIds = [
-    ...new Set(stale.flatMap((p) => [p.game.match.player1_id, p.game.match.player2_id]).filter((x): x is string => !!x)),
+    ...new Set(stale.flatMap((p) => [p.match.player1_id, p.match.player2_id]).filter((x): x is string => !!x)),
   ];
   const players = await fastify.prisma.user.findMany({
     where: { id: { in: playerIds } },
@@ -253,12 +275,12 @@ async function cancelOpenPlayNoShows(fastify: FastifyInstance, cutoff: Date): Pr
   let cancelled = 0;
 
   for (const pick of stale) {
-    const match = pick.game.match;
+    const match = pick.match;
     const p1 = match.player1_id ? playerMap.get(match.player1_id) : null;
     const p2 = match.player2_id ? playerMap.get(match.player2_id) : null;
     const noShows: { id: string; username: string; discord_id: string | null }[] = [];
-    if (!pick.player1_locked_at && p1) noShows.push(p1);
-    if (!pick.player2_locked_at && p2) noShows.push(p2);
+    if (!pick.p1Picked && p1) noShows.push(p1);
+    if (!pick.p2Picked && p2) noShows.push(p2);
 
     try {
       await cancelOpenPlayMatch(fastify, {

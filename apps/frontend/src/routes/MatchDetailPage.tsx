@@ -644,6 +644,7 @@ export function MatchDetailPage() {
               maps={maps}
               factions={factions}
               isOpenPlay={isOpenPlay}
+              tournamentMode={gamesData.pickMode ?? undefined}
             />
           ))}
         </div>

@@ -549,6 +549,17 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(200).send({ ok: true });
   });
 
+  // DELETE /api/admin/users/:id/weekly-ban — clear a player's weekly Open Play ban and its 7-day lock, so he can
+  // set a new one at once. Matches already created keep their snapshot.
+  fastify.delete<{ Params: { id: string } }>('/api/admin/users/:id/weekly-ban', async (request, reply) => {
+    const { count } = await fastify.prisma.user.updateMany({
+      where: { id: request.params.id },
+      data: { weekly_ban_faction_id: null, weekly_ban_set_at: null },
+    });
+    if (count === 0) return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
+    return reply.code(200).send({ ok: true });
+  });
+
   // PATCH /api/admin/users/:id/role — change a user's role
   fastify.patch<{ Params: { id: string }; Body: { role: string } }>(
     '/api/admin/users/:id/role',

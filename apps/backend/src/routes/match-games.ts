@@ -377,6 +377,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           withdrawn_player_id: true,
           tournament_id: true,
           competitor_format: true,
+          pick_mode: true,
           tournament: { select: { host_id: true, mode: true, counts_for_leaderboard: true, competitor_format: true } },
           games: {
             orderBy: { game_number: 'asc' },
@@ -434,8 +435,9 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Free Pick: a player who registered a fixed faction plays it in every game.
-      const mode = match.tournament?.mode ?? null;
+      // Free Pick: a player who registered a fixed faction plays it in every game. An Open Play match stamped
+      // with the 3×3 matrix walks the matrix's steps.
+      const mode = match.tournament?.mode ?? match.pick_mode ?? null;
       let freePickFixed: { p1: string | null; p2: string | null } | null = null;
       if (mode === 'FREE_PICK' && match.tournament_id) {
         const parts = await fastify.prisma.tournamentParticipant.findMany({
@@ -475,6 +477,8 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         player1Id: match.player1_id,
         player2Id: match.player2_id,
         withdrawnPlayerId: match.withdrawn_player_id ?? null,
+        // Open Play's faction step when it isn't the blind pick ('MATRIX'), for the game tiles.
+        pickMode: match.tournament ? null : (match.pick_mode ?? null),
       });
     },
   );

@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { randomBytes, randomInt } from 'node:crypto';
 import { revealedBans } from './blind-pick-auto-resolve.js';
+import { refreshMatchCards } from './discord-open-play.js';
 
-const BLIND_TIMEOUT_MS = 2 * 60 * 1000;   // 2 min for blind faction picks
+export const MATRIX_PICK_TIMEOUT_MS = 2 * 60 * 1000; // 2 min for the blind three picks (tournaments)
 const BAN_TIMEOUT_MS = 30 * 1000;          // 30s per ban/pick action (all bans + the final pick)
 const FIRST_BAN_TIMEOUT_MS = 30 * 1000;    // 30s for the very first ban (same as the rest now)
 
@@ -65,13 +66,14 @@ function emitUpdate(fastify: FastifyInstance, matchId: string, matrix: {
 
 /**
  * Scans for stale matrix actions and auto-resolves them:
- * Phase 1 — Blind-pick timeout (2 min): one player locked but opponent hasn't.
- * Phase 2 — Ban/pick timeout: 30s for every ban and the final pick.
+ * Phase 1 — Blind-pick timeout (2 min): one player locked but opponent hasn't. Tournaments only: an Open Play
+ *           matrix whose three picks run out is cancelled with a strike instead (blind-pick-auto-resolve.ts).
+ * Phase 2 — Ban/pick timeout: 30s for every ban and the final pick, Open Play included.
  * Called every 15 seconds by the cron plugin.
  */
 export async function autoResolveStaleMatrixActions(fastify: FastifyInstance): Promise<number> {
   const now = new Date();
-  const cutoffBlind = new Date(now.getTime() - BLIND_TIMEOUT_MS);
+  const cutoffBlind = new Date(now.getTime() - MATRIX_PICK_TIMEOUT_MS);
   const cutoffBan = new Date(now.getTime() - BAN_TIMEOUT_MS);
   const cutoffFirstBan = new Date(now.getTime() - FIRST_BAN_TIMEOUT_MS);
   let resolved = 0;
@@ -84,6 +86,7 @@ export async function autoResolveStaleMatrixActions(fastify: FastifyInstance): P
     where: {
       revealed_at: null,
       first_locked_at: { not: null, lt: cutoffBlind },
+      game: { match: { tournament_id: { not: null } } },
     },
     include: {
       game: {
@@ -185,7 +188,7 @@ export async function autoResolveStaleMatrixActions(fastify: FastifyInstance): P
       game: {
         select: {
           id: true,
-          match: { select: { id: true } },
+          match: { select: { id: true, type: true } },
           map_decision: { select: { picked_map_id: true } },
         },
       },
@@ -231,6 +234,8 @@ export async function autoResolveStaleMatrixActions(fastify: FastifyInstance): P
 
       const matchId = matrix.game.match.id;
       emitUpdate(fastify, matchId, updated);
+      // Discord Open Play: no request ran, so the cards don't refresh on their own (a turn is 30 s).
+      if (matrix.game.match.type === 'OPEN_PLAY') void refreshMatchCards(fastify, matchId);
 
       if (updated.decided_at && matrix.game.map_decision?.picked_map_id) {
         fastify.io?.to(matchDecisionRoom(matchId)).emit('match.decision.complete', {

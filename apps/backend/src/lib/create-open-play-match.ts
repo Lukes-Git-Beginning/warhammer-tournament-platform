@@ -1,10 +1,27 @@
 import type { PrismaClient, $Enums } from '@rizzotto/db';
+import { snapshotWeeklyBans } from './weekly-ban.js';
+
+/** Battle types whose 1v1 Bo3 picks factions with the 3×3 matrix instead of the blind pick (VL picking). */
+export const OPEN_PLAY_MATRIX_BATTLE_TYPES: readonly $Enums.BattleType[] = ['LAND_BATTLE', 'CONQUEST'];
+
+/** Open Play's faction step for a new match: MATRIX for a 1v1 Bo3 in Land Battle or Conquest, else the blind pick (null). */
+export function openPlayPickMode(
+  battleType: $Enums.BattleType,
+  competitorFormat: $Enums.CompetitorFormat,
+  matchFormat: $Enums.MatchFormat | null,
+): 'MATRIX' | null {
+  return competitorFormat === 'ONE_V_ONE' && matchFormat === 'BO3' && OPEN_PLAY_MATRIX_BATTLE_TYPES.includes(battleType)
+    ? 'MATRIX'
+    : null;
+}
 
 /**
  * Creates an Open Play match with:
  * - A random map drawn from the AVAILABLE pool for the given battle type
- * - A MatchGame (stamped with the battle type) ready for blind faction pick
- * - A MatchBlindPick (both factions null — awaiting player input)
+ * - A MatchGame (stamped with the battle type) ready for the faction step
+ * - A MatchBlindPick (both factions null — awaiting player input); none for the matrix, whose row comes with the
+ *   first lock
+ * - The players' weekly bans as they stand now (2v2: all four members)
  */
 export async function createOpenPlayMatch(
   prisma: PrismaClient,
@@ -30,6 +47,21 @@ export async function createOpenPlayMatch(
     select: { id: true },
   });
 
+  const pickMode = openPlayPickMode(battleType, competitorFormat, matchFormat);
+  const banUserIds =
+    competitorFormat === 'TWO_V_TWO'
+      ? (
+          await prisma.teamMember.findMany({
+            where: { team_id: { in: [player1Id, player2Id] }, accepted_at: { not: null } },
+            orderBy: { invited_at: 'asc' },
+            select: { team_id: true, user_id: true },
+          })
+        )
+          .sort((a, b) => Number(a.team_id === player2Id) - Number(b.team_id === player2Id))
+          .map((m) => m.user_id)
+      : [player1Id, player2Id];
+  const weeklyBans = await snapshotWeeklyBans(prisma, banUserIds);
+
   const newMatch = await prisma.$transaction(async (tx) => {
     const match = await tx.match.create({
       data: {
@@ -43,6 +75,8 @@ export async function createOpenPlayMatch(
         match_format: matchFormat,
         status: 'ONGOING',
         version_id: activeVersion?.id ?? null,
+        pick_mode: pickMode,
+        weekly_bans: weeklyBans,
       },
     });
 
@@ -73,7 +107,7 @@ export async function createOpenPlayMatch(
       });
     }
 
-    await tx.matchBlindPick.create({ data: { game_id: game.id } });
+    if (!pickMode) await tx.matchBlindPick.create({ data: { game_id: game.id } });
 
     return match;
   });

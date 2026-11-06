@@ -16,8 +16,9 @@
  */
 import { z } from 'zod';
 import { BATTLE_TYPES } from '@rizzotto/types';
-import type { $Enums } from '@rizzotto/db';
+import type { $Enums, Prisma } from '@rizzotto/db';
 import { prisma } from '@rizzotto/db';
+import { matchWeeklyBans } from './weekly-ban.js';
 
 export const STANDARD_RULESET_CONFIG_KEY = 'standard_ruleset';
 
@@ -156,13 +157,16 @@ export async function standardBannedFactionIds(
 /**
  * Open Play is bound by the Standard Ruleset (Alex, 2026-10-07): its banned factions cannot be
  * picked there. Tournaments are NOT — a host runs with or without the Standard Rules and bans
- * factions per tournament. Returns [] for a tournament match.
+ * factions per tournament. Returns [] for a tournament match. On top come the players' weekly bans
+ * as the match recorded them (`weekly_bans`), banned for both sides (2026-11-06).
  */
 export async function openPlayBannedFactionIds(match: {
   tournament_id: string | null;
   competitor_format: $Enums.CompetitorFormat;
   battle_type: $Enums.BattleType | null | undefined;
+  weekly_bans?: Prisma.JsonValue | null;
 }): Promise<string[]> {
   if (match.tournament_id) return [];
-  return standardBannedFactionIds(match.battle_type ?? 'DOMINATION', match.competitor_format);
+  const standard = await standardBannedFactionIds(match.battle_type ?? 'DOMINATION', match.competitor_format);
+  return [...new Set([...standard, ...matchWeeklyBans(match.weekly_bans).map((b) => b.factionId)])];
 }

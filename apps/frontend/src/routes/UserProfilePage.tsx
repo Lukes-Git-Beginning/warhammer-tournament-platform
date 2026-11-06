@@ -29,6 +29,7 @@ import { formatInUserTimezone } from '@/lib/timezone.js';
 import { Button } from '@/components/ui/button.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
 import { PageShell } from '@/components/layout/PageShell.js';
+import { WeeklyBanSection } from '@/components/open-play/WeeklyBanSection.js';
 
 /** Map deprecated IANA aliases to their current canonical name (e.g. Kiev → Kyiv). */
 function normalizeTimezone(tz: string): string {
@@ -763,6 +764,9 @@ export function UserProfilePage() {
 
       {/* Recent Tournaments — paginated (10/page), all available. */}
       <RecentTournamentsSection userId={id} battleType={scope} />
+
+      {/* Weekly Open Play ban: editable on your own profile, shown on everyone's once set. */}
+      <WeeklyBanSection userId={id} isOwn={isOwnProfile} isAdmin={me?.role === 'ADMIN'} />
 
       {/* Timezone (own profile only) */}
       {isOwnProfile && me && <TimezoneSection user={me} />}

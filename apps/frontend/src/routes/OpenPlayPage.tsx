@@ -45,6 +45,7 @@ import { WeekAvailabilityGrid } from '../components/open-play/WeekAvailabilityGr
 import { AvailabilityHeatmap } from '../components/open-play/AvailabilityHeatmap';
 import { ChallengeCalendar } from '../components/open-play/ChallengeCalendar';
 import { OpenPlayConduct, OpenPlayRules } from '../components/open-play/OpenPlayConduct';
+import { WeeklyBanHint } from '../components/open-play/WeeklyBanSection';
 import { RequiredModsNotice } from '../components/tournament/RequiredModsNotice';
 import { PageBackdrop } from '../components/layout/PageBackdrop';
 
@@ -409,7 +410,12 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
             })}
             <span className="text-xs text-stone-500">Siege is always Bo2</span>
           </div>
+          <p className="mt-1.5 text-xs text-stone-500">
+            Bo3 in Land Battle and Conquest picks factions with the 3×3 matrix, anew before every game.
+          </p>
         </div>
+
+        {me && <WeeklyBanHint userId={me.id} />}
 
         {narrowSelection && (
           <p role="status" className="text-xs text-red-400">

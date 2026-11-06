@@ -1,5 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { openPlayBannedFactionIds } from '../lib/standard-ruleset.js';
+import { factionPickMode } from '../lib/faction-pick-mode.js';
+import { weeklyBansWithNames } from '../lib/weekly-ban.js';
 import type { PrismaClient } from '@rizzotto/db';
 import { z } from 'zod';
 import { randomBytes, randomInt } from 'node:crypto';
@@ -10,6 +12,7 @@ import {
   TOURNAMENT_BLIND_PICK_TIMEOUT_MS,
   revealedBans,
 } from '../lib/blind-pick-auto-resolve.js';
+import { MATRIX_PICK_TIMEOUT_MS } from '../lib/matrix-auto-resolve.js';
 import { isTeamFormat, resolveActorFlags } from '../lib/competitors.js';
 
 // ---------------------------------------------------------------------------
@@ -456,6 +459,40 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         })
         .filter((x): x is NonNullable<typeof x> => x !== null);
 
+      // The 3×3 matrix's three picks run the same kind of clock once one side has locked its three
+      // (Open Play 5 min, then cancelled; a tournament 2 min, then three random ones).
+      const matrices = await fastify.prisma.matchFactionMatrix.findMany({
+        where: {
+          revealed_at: null,
+          first_locked_at: { not: null },
+          game: {
+            match: {
+              deleted_at: null,
+              status: { in: ['PENDING', 'ONGOING'] },
+              OR: [{ player1_id: userId }, { player2_id: userId }],
+            },
+          },
+        },
+        select: {
+          p1_locked_at: true,
+          p2_locked_at: true,
+          first_locked_at: true,
+          game: { select: { match: { select: { id: true, player1_id: true, tournament: { select: { slug: true, name: true } } } } } },
+        },
+      });
+      for (const m of matrices) {
+        const match = m.game.match;
+        if (match.player1_id === userId ? m.p1_locked_at : m.p2_locked_at) continue;
+        const deadlineMs = m.first_locked_at!.getTime() + (match.tournament ? MATRIX_PICK_TIMEOUT_MS : OPEN_PLAY_BLIND_PICK_TIMEOUT_MS);
+        if (deadlineMs <= now) continue;
+        picks.push({
+          matchId: match.id,
+          tournamentSlug: match.tournament?.slug ?? null,
+          tournamentName: match.tournament?.name ?? null,
+          deadline: new Date(deadlineMs).toISOString(),
+        });
+      }
+
       return { picks };
     },
   );
@@ -478,6 +515,8 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           player2_id: true,
           tournament_id: true,
           competitor_format: true,
+          pick_mode: true,
+          weekly_bans: true,
           tournament: {
             select: {
               mode: true,
@@ -545,13 +584,13 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.code(200).send({
-        // Open-Play 2v2 has no tournament → derive the 2v2 blind-pick mode from the match so the
-        // client (is2v2 = tournamentMode === 'BPT_2V2') shows the two-faction pick, not 1v1.
+        // Open Play has no tournament → the match's own step: the 3×3 matrix it was stamped with, else
+        // the blind pick (BPT_2V2 for 2v2, so the client shows the two-faction pick, not 1v1).
         ...serializeDecisionState(
           matchId,
           game.map_decision,
           game.blind_pick,
-          match.tournament?.mode ?? (match.competitor_format === 'TWO_V_TWO' ? 'BPT_2V2' : 'BPT'),
+          factionPickMode(match),
           match.player1_id,
           factionMatrix,
           match.tournament == null,
@@ -568,7 +607,10 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           tournament_id: match.tournament_id,
           competitor_format: match.competitor_format,
           battle_type: game.battle_type,
+          weekly_bans: match.weekly_bans,
         }),
+        // Open Play: whose weekly ban each of those is, so the pick can say so.
+        weeklyBans: match.tournament_id ? [] : await weeklyBansWithNames(fastify.prisma, match.weekly_bans),
         freePick,
         oneVThree,
       });
@@ -1230,6 +1272,8 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           player2_id: true,
           tournament_id: true,
           competitor_format: true,
+          pick_mode: true,
+          weekly_bans: true,
           games: {
             where: { map_decision: { isNot: null }, status: { not: 'COMPLETED' } },
             orderBy: { game_number: 'desc' },
@@ -1261,13 +1305,13 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Blind pick is allowed for BPT tournaments and for Open Play matches
-      // (no tournament). Other tournament modes (SFT, etc.) do not use it.
-      const mode = match.tournament?.mode as string | undefined;
-      if (match.tournament !== null && mode !== 'BPT' && mode !== 'BPT_2V2') {
+      // Blind pick is allowed for BPT tournaments and for Open Play matches (no tournament) that weren't
+      // stamped with the 3×3 matrix. Other tournament modes (SFT, etc.) do not use it.
+      const mode = factionPickMode(match);
+      if (mode !== 'BPT' && mode !== 'BPT_2V2') {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
-          message: 'Blind pick is only available in BPT mode tournaments',
+          message: match.tournament ? 'Blind pick is only available in BPT mode tournaments' : 'This match picks factions with the 3×3 matrix',
           statusCode: 422,
         });
       }
@@ -1332,12 +1376,13 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         tournament_id: match.tournament_id,
         competitor_format: match.competitor_format,
         battle_type: game.battle_type,
+        weekly_bans: match.weekly_bans,
       });
       for (const fid of [faction_id, faction_id_2]) {
         if (fid && bannedFactions.includes(fid)) {
           return reply.code(422).send({
             error: 'UnprocessableEntity',
-            message: 'This faction is banned in Open Play by the Standard Ruleset',
+            message: 'This faction is banned in Open Play for this match (Standard Ruleset or a weekly ban)',
             statusCode: 422,
           });
         }

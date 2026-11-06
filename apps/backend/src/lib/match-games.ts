@@ -157,6 +157,7 @@ export async function finalizeGameResult(
           tournament_id: true,
           phase: true,
           match_format: true,
+          pick_mode: true,
           tournament: {
             select: {
               mode: true,
@@ -191,7 +192,8 @@ export async function finalizeGameResult(
   let p1Faction2: string | null = null;
   let p2Faction2: string | null = null;
 
-  const mode = game.match.tournament?.mode;
+  // Open Play has no tournament mode; a match stamped with the 3×3 matrix resolves like a MATRIX game.
+  const mode = game.match.tournament?.mode ?? game.match.pick_mode ?? undefined;
   if (mode === 'BPT' && game.blind_pick?.revealed_at) {
     p1FactionId = game.blind_pick.player1_faction_id ?? null;
     p2FactionId = game.blind_pick.player2_faction_id ?? null;
@@ -394,6 +396,7 @@ export async function finalizeGameResult(
 
     // For Open Play (no tournament): auto-assign a random map + blind pick so
     // players go straight to faction selection — no "Choose Battlefield" needed.
+    // A matrix match gets no blind pick: its matrix row comes with the first lock.
     if (!game.match.tournament && game.match.player1_id && game.match.player2_id) {
       const existing = await fastify.prisma.matchMapDecision.findUnique({ where: { game_id: nextGameId } });
       if (!existing) {
@@ -419,7 +422,9 @@ export async function finalizeGameResult(
             },
           });
         }
-        await fastify.prisma.matchBlindPick.create({ data: { game_id: nextGameId } });
+        if (game.match.pick_mode !== 'MATRIX') {
+          await fastify.prisma.matchBlindPick.create({ data: { game_id: nextGameId } });
+        }
       }
     }
 

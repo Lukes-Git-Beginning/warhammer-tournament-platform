@@ -15,6 +15,7 @@ import { resolveCompetitors } from '../lib/competitors.js';
 import { loadCalibrationQuestions, classifyWithModel, getClassificationModel } from '../lib/skill-classification-service.js';
 import { SKILL_BATTLE_TYPES } from '../lib/skill-classification.js';
 import { SITE_NOTICES, activeNoticesFor, dismissNotice } from '../lib/site-notices.js';
+import { setWeeklyBan, weeklyBanOpensAt } from '../lib/weekly-ban.js';
 
 const meSelect = {
   id: true,
@@ -210,6 +211,44 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     await dismissNotice(fastify.prisma, request.user.sub, parsed.data.id);
     return { ok: true } as const;
   });
+
+  // GET /api/users/:id/weekly-ban — public: the player's weekly Open Play ban and when it can change again.
+  fastify.get('/api/users/:id/weekly-ban', async (request, reply) => {
+    const parsed = z.object({ id: z.string().uuid() }).safeParse(request.params);
+    if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: 'Invalid user id', statusCode: 400 });
+    const user = await fastify.prisma.user.findFirst({
+      where: { id: parsed.data.id, deleted_at: null },
+      select: { weekly_ban_faction_id: true, weekly_ban_set_at: true },
+    });
+    if (!user) return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
+    return {
+      factionId: user.weekly_ban_faction_id,
+      setAt: user.weekly_ban_set_at?.toISOString() ?? null,
+      opensAt: weeklyBanOpensAt(user.weekly_ban_set_at)?.toISOString() ?? null,
+    };
+  });
+
+  // PUT /api/users/me/weekly-ban — set (or clear, with null) your weekly Open Play ban. 409 while it's locked.
+  fastify.put('/api/users/me/weekly-ban', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const parsed = z.object({ factionId: z.string().min(1).nullable() }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: 'Expected { factionId }', statusCode: 400 });
+    const result = await setWeeklyBan(fastify.prisma, request.user.sub, parsed.data.factionId);
+    if (!result.ok && result.reason === 'locked') {
+      return reply.code(409).send({
+        error: 'Conflict',
+        message: `You can change your weekly ban on ${result.opensAt.toISOString()}`,
+        statusCode: 409,
+        opensAt: result.opensAt.toISOString(),
+      });
+    }
+    if (!result.ok) return reply.code(400).send({ error: 'BadRequest', message: 'Unknown faction', statusCode: 400 });
+    return {
+      factionId: result.factionId,
+      setAt: result.setAt?.toISOString() ?? null,
+      opensAt: weeklyBanOpensAt(result.setAt)?.toISOString() ?? null,
+    };
+  });
+
   // PATCH /api/users/:id/role — admin only
   fastify.patch(
     '/api/users/:id/role',
