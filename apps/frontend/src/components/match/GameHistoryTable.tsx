@@ -147,7 +147,9 @@ export function GameHistoryTable({ games, showTournament = false, showBattleType
                 <td className="px-3 py-2">
                   {g.replayUrl
                     ? <a href={g.replayUrl} download className="text-rizzotto-gold-400 hover:text-rizzotto-gold-300 text-xs underline">Download</a>
-                    : <span className="text-stone-600 text-xs">—</span>
+                    : g.replayHiddenUntil
+                      ? <span className="text-stone-500 text-xs" title="A player keeps his replays hidden for 30 days">Hidden until {formatInUserTimezone(g.replayHiddenUntil, undefined, { showTime: false })}</span>
+                      : <span className="text-stone-600 text-xs">—</span>
                   }
                 </td>
               </tr>

@@ -334,6 +334,9 @@ model User {
   // of this player. Changeable 7 days after the last change at the earliest (lib/weekly-ban.ts).
   weekly_ban_faction_id String?
   weekly_ban_set_at     DateTime?
+  // Hide this player's replays for 30 days after each game (lib/replay-privacy.ts); read live, either player of a
+  // game can hide its replay. The game's players and staff still see it.
+  hide_replays          Boolean          @default(false)
   created_at          DateTime         @default(now())
   updated_at          DateTime         @updatedAt
   deleted_at          DateTime?

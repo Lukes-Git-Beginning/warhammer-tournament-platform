@@ -11,6 +11,7 @@ import { resolveRuleDocuments } from '../lib/rule-documents.js';
 import { arenaModFallback, fetchArenaModInfo } from '../lib/arena-mod.js';
 import { resolveCompetitors } from '../lib/competitors.js';
 import { computeDuoMeta } from '../lib/duo-meta.js';
+import { hiddenReplays, optionalViewer } from '../lib/replay-privacy.js';
 
 // ---------------------------------------------------------------------------
 // Query Schemas
@@ -461,6 +462,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
           player2_faction_id_2: true,
           battle_type: true,
           played_at: true,
+          reported_at: true,
           replay_url: true,
           counts_for_leaderboard: true,
           map_decision: { select: { picked_map_id: true } },
@@ -473,6 +475,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
               source: true,
               player1_id: true,
               player2_id: true,
+              tournament_id: true,
               tournament: { select: { id: true, name: true, slug: true } },
             },
           },
@@ -494,6 +497,9 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       return c ? { id: c.id, username: c.username, avatar_url: c.avatar_url, type: c.type } : null;
     };
 
+    // Replays a player hides stay hidden for 30 days, except for the game's players and staff.
+    const hidden = await hiddenReplays(fastify.prisma, games.filter((g) => g.replay_url), await optionalViewer(request));
+
     const rows = games.map((g) => ({
       round: g.match.round,
       matchNumber: g.match.match_number,
@@ -512,7 +518,8 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       player2FactionId2: g.player2_faction_id_2,
       battleType: g.battle_type,
       mapPickedId: g.map_decision?.picked_map_id ?? null,
-      replayUrl: g.replay_url,
+      replayUrl: hidden.has(g.id) ? null : g.replay_url,
+      replayHiddenUntil: hidden.get(g.id)?.toISOString() ?? null,
       countsForLeaderboard: g.counts_for_leaderboard,
     }));
 

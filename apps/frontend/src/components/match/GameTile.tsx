@@ -406,6 +406,11 @@ export function GameTile({
                 Download Replay
               </a>
             )}
+            {!game.replayUrl && game.replayHiddenUntil && (
+              <span className="text-xs text-rizzotto-stone-500">
+                Replay hidden until {new Date(game.replayHiddenUntil).toLocaleDateString()}
+              </span>
+            )}
           </div>
           <PlayerInfo
             name={rightName}

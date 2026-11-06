@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { WeeklyBanSection } from '@/components/open-play/WeeklyBanSection.js';
+import { getReplayPrivacy, setReplayPrivacy } from '@/lib/api.js';
 
 /** Map deprecated IANA aliases to their current canonical name (e.g. Kiev → Kyiv). */
 function normalizeTimezone(tz: string): string {
@@ -89,6 +90,37 @@ function TimezoneSection({ user }: { user: UserMe }) {
       <p className="mt-2 text-xs text-stone-500">
         Controls when your availability calendar sends match invitations.
       </p>
+    </section>
+  );
+}
+
+/** Own profile: keep your replays hidden for 30 days after each game (your opponents and staff still see them). */
+function ReplayPrivacySection() {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ['replay-privacy'], queryFn: getReplayPrivacy });
+  const save = useMutation({
+    mutationFn: (hidden: boolean) => setReplayPrivacy(hidden),
+    onSuccess: (next) => qc.setQueryData(['replay-privacy'], next),
+  });
+  if (!data) return null;
+  return (
+    <section>
+      <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">Replays</h2>
+      <label className="flex items-center gap-2 text-sm text-stone-300">
+        <input
+          type="checkbox"
+          checked={data.hidden}
+          disabled={save.isPending}
+          onChange={(e) => save.mutate(e.target.checked)}
+          className="h-4 w-4 accent-rizzotto-gold-500"
+        />
+        Keep my replays hidden for {data.days} days after each game
+      </label>
+      <p className="mt-2 text-xs text-stone-500">
+        Nobody can download them in that time except your opponent and the admins (and the hosts, in their
+        tournaments). A game&apos;s replay stays hidden if either player has this on.
+      </p>
+      {save.error && <p className="mt-1 text-xs text-red-400">{save.error.message}</p>}
     </section>
   );
 }
@@ -767,6 +799,9 @@ export function UserProfilePage() {
 
       {/* Weekly Open Play ban: editable on your own profile, shown on everyone's once set. */}
       <WeeklyBanSection userId={id} isOwn={isOwnProfile} isAdmin={me?.role === 'ADMIN'} />
+
+      {/* Hidden replays (own profile only) */}
+      {isOwnProfile && <ReplayPrivacySection />}
 
       {/* Timezone (own profile only) */}
       {isOwnProfile && me && <TimezoneSection user={me} />}

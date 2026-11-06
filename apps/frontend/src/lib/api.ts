@@ -1476,6 +1476,15 @@ export function setWeeklyBan(factionId: string | null): Promise<WeeklyBanState> 
   return apiFetch<WeeklyBanState>('/api/users/me/weekly-ban', { method: 'PUT', body: JSON.stringify({ factionId }) });
 }
 
+// Hidden replays: keep your replays hidden for `days` after each game (players and staff still see them).
+export function getReplayPrivacy(): Promise<{ hidden: boolean; days: number }> {
+  return apiFetch<{ hidden: boolean; days: number }>('/api/users/me/replay-privacy');
+}
+
+export function setReplayPrivacy(hidden: boolean): Promise<{ hidden: boolean; days: number }> {
+  return apiFetch<{ hidden: boolean; days: number }>('/api/users/me/replay-privacy', { method: 'PUT', body: JSON.stringify({ hidden }) });
+}
+
 // Admin: clears a player's weekly ban and its lock.
 export function resetAdminUserWeeklyBan(userId: string): Promise<{ ok: boolean }> {
   return apiFetch<{ ok: boolean }>(`/api/admin/users/${userId}/weekly-ban`, { method: 'DELETE' });
@@ -2860,6 +2869,8 @@ export interface GameDto {
   reportedAt: string | null;
   confirmedAt: string | null;
   replayUrl: string | null;
+  /** Set when one of the players hides his replays and this viewer may not see it yet (replayUrl is null then). */
+  replayHiddenUntil?: string | null;
   playedAt: string | null;
   /** Replay-mismatch verification (participants/staff only): the discrepancies + reporter explanation,
    *  and — for the player-driven flow — whether it awaits the opponent's confirmation (with the

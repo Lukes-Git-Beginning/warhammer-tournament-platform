@@ -16,6 +16,7 @@ import { loadCalibrationQuestions, classifyWithModel, getClassificationModel } f
 import { SKILL_BATTLE_TYPES } from '../lib/skill-classification.js';
 import { SITE_NOTICES, activeNoticesFor, dismissNotice } from '../lib/site-notices.js';
 import { setWeeklyBan, weeklyBanOpensAt } from '../lib/weekly-ban.js';
+import { REPLAY_HIDE_DAYS } from '../lib/replay-privacy.js';
 
 const meSelect = {
   id: true,
@@ -247,6 +248,19 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       setAt: result.setAt?.toISOString() ?? null,
       opensAt: weeklyBanOpensAt(result.setAt)?.toISOString() ?? null,
     };
+  });
+
+  // GET / PUT /api/users/me/replay-privacy — keep your replays hidden for 30 days after each game
+  // (lib/replay-privacy.ts). Read live: turning it on hides the last 30 days too, turning it off frees them.
+  fastify.get('/api/users/me/replay-privacy', { preHandler: fastify.authenticate }, async (request) => {
+    const user = await fastify.prisma.user.findUniqueOrThrow({ where: { id: request.user.sub }, select: { hide_replays: true } });
+    return { hidden: user.hide_replays, days: REPLAY_HIDE_DAYS };
+  });
+  fastify.put('/api/users/me/replay-privacy', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const parsed = z.object({ hidden: z.boolean() }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: 'Expected { hidden }', statusCode: 400 });
+    await fastify.prisma.user.update({ where: { id: request.user.sub }, data: { hide_replays: parsed.data.hidden } });
+    return { hidden: parsed.data.hidden, days: REPLAY_HIDE_DAYS };
   });
 
   // PATCH /api/users/:id/role — admin only

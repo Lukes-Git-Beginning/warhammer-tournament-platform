@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 ### Added
 - **The 3×3 matrix comes to Open Play.** A Bo3 in Land Battle or Conquest now picks factions like our Matrix tournaments, anew before every game: you each name three factions blind, then take turns striking matchups in the grid until two are left, and the coin-toss winner picks the one you play. It works on the match page and on your Discord match card. Bo1, and Bo3 in Domination and Domquest, keep the blind pick.
 - **Your weekly ban.** Pick one faction on your profile, or in the queue DM on Discord. In all your Open Play matches it is banned for both players, and you can change it once every 7 days. Every pick screen shows which factions are banned and whose ban each one is.
+- **Keep your replays to yourself for a month.** Turn it on in your profile and your replays stay hidden for 30 days after each game, in Open Play and in tournaments. Only your opponent and the admins can download them in that time (and the hosts, in their tournaments). If either player of a game has it on, that game's replay is hidden.
 
 ### Changed
 - **The pick timer in Open Play says what happens.** When it runs out, the match is cancelled; the timer used to talk about an automatic pick, which only tournaments do.

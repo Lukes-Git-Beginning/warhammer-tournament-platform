@@ -6,6 +6,7 @@ import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import { REPLAY_DIR } from './lib/replays.js';
+import { replayFileGate } from './lib/replay-privacy.js';
 import { POSTER_DIR } from './lib/posters.js';
 import dbPlugin from './plugins/db.js';
 import redisPlugin from './plugins/redis.js';
@@ -114,14 +115,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   // Replays and posters are written to persistent paths outside the repo checkout
   // (REPLAY_DIR / POSTER_DIR — see lib/replays.ts and lib/posters.ts). They must be
   // served from those exact paths, not from cwd/uploads, or the static server can't
-  // find them and the SPA fallback serves index.html instead. Register the more
-  // specific /uploads/replays/ and /uploads/posters/ prefixes before the general
-  // /uploads/ one.
-  await app.register(fastifyStatic, {
-    root: REPLAY_DIR,
-    prefix: '/uploads/replays/',
-    decorateReply: false,
-  });
+  // find them and the SPA fallback serves index.html instead. The more specific
+  // /uploads/replays/ and /uploads/posters/ prefixes win over the general /uploads/
+  // one. Replays are registered further down, behind the hidden-replay gate.
   await app.register(fastifyStatic, {
     root: POSTER_DIR,
     prefix: '/uploads/posters/',
@@ -147,6 +143,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(dbPlugin);
   if (withRedis) await app.register(redisPlugin);
   await app.register(authPlugin);
+  // Replay files, gated: a replay its player hides answers 403 to anyone who may not see it yet
+  // (lib/replay-privacy.ts). Needs the db and auth plugins above.
+  await app.register(async (scope) => {
+    scope.addHook('onRequest', replayFileGate(app.prisma));
+    await scope.register(fastifyStatic, { root: REPLAY_DIR, prefix: '/uploads/replays/', decorateReply: false });
+  });
   if (withDraft && withRedis) await app.register(draftPlugin);
   if (withSocket) await app.register(socketPlugin);
   if (withCron) await app.register(cronPlugin);

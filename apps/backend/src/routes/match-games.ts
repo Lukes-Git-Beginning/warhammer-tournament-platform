@@ -16,6 +16,7 @@ import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 import { invalidate } from '../lib/cache.js';
 import { emitBracketUpdate } from '../lib/emit.js';
 import { recordTournamentEvent } from '../lib/tournament-events.js';
+import { hiddenReplays } from '../lib/replay-privacy.js';
 
 const LobbyCodeBodySchema = z.object({
   lobby_code: z.string().max(64).nullable(),
@@ -450,10 +451,22 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         };
       }
 
+      // Replays a player hides stay hidden for 30 days, except for the game's players and staff.
+      const hidden = await hiddenReplays(
+        fastify.prisma,
+        gameRows
+          .filter((g) => g.replay_url)
+          .map((g) => ({ ...g, match: { player1_id: match.player1_id, player2_id: match.player2_id, tournament_id: match.tournament_id } })),
+        currentUserId ? { id: currentUserId } : null,
+      );
+
       // For Bo1 with no game row yet, return a virtual pending game
       const games =
         gameRows.length > 0
-          ? gameRows.map((g) => serializeGame(g, includeLobbyCodes, mode, freePickFixed))
+          ? gameRows.map((g) => ({
+              ...serializeGame(g, includeLobbyCodes, mode, freePickFixed),
+              ...(hidden.has(g.id) ? { replayUrl: null, replayHiddenUntil: hidden.get(g.id)!.toISOString() } : {}),
+            }))
           : [
               {
                 id: null,

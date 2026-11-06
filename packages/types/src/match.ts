@@ -223,6 +223,8 @@ export interface GameHistoryEntry {
   battleType?: BattleType;
   mapName: string | null;
   replayUrl: string | null;
+  /** Set when one of the players hides his replays: replayUrl is null for this viewer until then. */
+  replayHiddenUntil?: string | null;
   countsForLeaderboard?: boolean;
   tournament?: GameHistoryTournament;
   /** Open Play origin: 'QUEUE' (ladder) or 'CHALLENGE'; null/undefined for tournament games */
