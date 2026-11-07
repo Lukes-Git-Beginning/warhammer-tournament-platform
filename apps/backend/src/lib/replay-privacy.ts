@@ -12,6 +12,28 @@ const HIDE_MS = REPLAY_HIDE_DAYS * 24 * 60 * 60 * 1000;
 
 export type ReplayViewer = { id: string } | null;
 
+/** AuditLog actions for the option (entity User), read by the admin Players report: who uses it. */
+export const REPLAY_PRIVACY_AUDIT = { on: 'REPLAYS_HIDDEN_ON', off: 'REPLAYS_HIDDEN_OFF' } as const;
+
+/** Turn a player's option on or off; a real change is logged. */
+export async function setHideReplays(prisma: PrismaClient, userId: string, hidden: boolean): Promise<void> {
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { hide_replays: true } });
+  if (user.hide_replays === hidden) return;
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: userId }, data: { hide_replays: hidden } }),
+    prisma.auditLog.create({
+      data: {
+        entity_type: 'User',
+        entity_id: userId,
+        action: hidden ? REPLAY_PRIVACY_AUDIT.on : REPLAY_PRIVACY_AUDIT.off,
+        actor_id: userId,
+        old_value: { hidden: !hidden },
+        new_value: { hidden },
+      },
+    }),
+  ]);
+}
+
 export interface ReplayGame {
   id: string;
   played_at: Date | null;

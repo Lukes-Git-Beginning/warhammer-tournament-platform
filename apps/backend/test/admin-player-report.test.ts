@@ -1,6 +1,7 @@
 /**
  * Admin Players report: the pure row builder (window counts, team expansion, no-show rule, hosting,
- * queue + DM counters, questionnaire coverage) and the admin-only report routes (real PostgreSQL).
+ * queue + DM counters, questionnaire coverage, weekly ban / matrix / hidden replays) and the admin-only
+ * report routes (real PostgreSQL).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
@@ -13,6 +14,8 @@ import {
   type PlayerReportInput,
   type ReportUser,
 } from '../src/lib/admin-player-report.js';
+import { setHideReplays } from '../src/lib/replay-privacy.js';
+import { setWeeklyBan } from '../src/lib/weekly-ban.js';
 import { createTestUser, cleanupUsers, type TestUser } from './helpers/db-fixtures.js';
 
 const NOW = new Date('2026-10-10T12:00:00Z');
@@ -33,6 +36,9 @@ function user(id: string, extra: Partial<ReportUser> = {}): ReportUser {
     steamVerified: true,
     referralSource: null,
     answered: { general: false, DOMINATION: false, DOMQUEST: false, CONQUEST: false, LAND_BATTLE: false, SIEGE: false },
+    weeklyBan: null,
+    weeklyBanSetAt: null,
+    hidesReplays: false,
     ...extra,
   };
 }
@@ -50,6 +56,7 @@ function input(patch: Partial<PlayerReportInput>): PlayerReportInput {
     hosted: [],
     queueEvents: [],
     dms: [],
+    featureEvents: [],
     ...patch,
   };
 }
@@ -243,6 +250,48 @@ describe('buildPlayerReportRows', () => {
     });
     expect(row(rows, 'c')).toMatchObject({ queueJoins: 1, queueWarnings: 1, queueTimeouts: 1 });
   });
+
+  it('shows the weekly ban, the matrix and hidden replays, now and ever', () => {
+    const game = (matrix: boolean, playedAt = IN) => ({
+      playedAt,
+      type: 'OPEN_PLAY' as const,
+      source: 'QUEUE' as const,
+      tournamentId: null,
+      hasReplay: false,
+      matrix,
+      competitorIds: ['a', 'b'],
+    });
+    const rows = buildPlayerReportRows(
+      input({
+        users: [
+          user('a', { weeklyBan: 'Empire', weeklyBanSetAt: IN, hidesReplays: true }),
+          user('b', { weeklyBanSetAt: IN }), // set, then dropped
+          user('c'), // reset by an admin, turned hidden replays off again
+        ],
+        games: [game(true), game(false), game(true, OLD)],
+        featureEvents: [
+          { userId: 'a', action: 'WEEKLY_BAN_SET', at: IN },
+          { userId: 'b', action: 'WEEKLY_BAN_SET', at: IN },
+          { userId: 'b', action: 'WEEKLY_BAN_DROP', at: IN },
+          { userId: 'c', action: 'WEEKLY_BAN_SET', at: OLD },
+          { userId: 'c', action: 'WEEKLY_BAN_DROP', at: OLD },
+          { userId: 'c', action: 'REPLAYS_HIDDEN_ON', at: OLD },
+        ],
+      }),
+    );
+    expect(row(rows, 'a')).toMatchObject({
+      weeklyBan: 'Empire',
+      weeklyBanSetAt: IN.toISOString(),
+      everBanned: true,
+      banDrops: 0,
+      openPlayMatrix: 1,
+      hidesReplays: true,
+      everHidReplays: true,
+    });
+    expect(row(rows, 'b')).toMatchObject({ weeklyBan: null, everBanned: true, banDrops: 1, openPlayMatrix: 1, hidesReplays: false, everHidReplays: false });
+    // Drops count in the window; "ever" is all time.
+    expect(row(rows, 'c')).toMatchObject({ weeklyBan: null, everBanned: true, banDrops: 0, openPlayMatrix: 0, hidesReplays: false, everHidReplays: true });
+  });
 });
 
 describe('report helpers', () => {
@@ -334,6 +383,16 @@ describe('admin report routes', () => {
     const grid = (schedule.json() as { tournamentAvailability: number[][] }).tournamentAvailability;
     expect(grid).toHaveLength(7);
     expect(grid[0]).toHaveLength(24);
+  });
+
+  it('reads the weekly ban and hidden replays from the users and the log', async () => {
+    const faction = await prisma.faction.findFirstOrThrow({ orderBy: { name: 'asc' }, select: { id: true, name: true } });
+    await setWeeklyBan(prisma, player.id, faction.id);
+    await setWeeklyBan(prisma, player.id, null);
+    await setHideReplays(prisma, player.id, true);
+    const res = await app.inject({ method: 'GET', url: '/api/admin/reports/players?days=30', cookies: cookie(admin, 'ADMIN') });
+    const me = (res.json() as { players: Record<string, unknown>[] }).players.find((p) => p.id === player.id);
+    expect(me).toMatchObject({ weeklyBan: null, everBanned: true, banDrops: 1, hidesReplays: true, everHidReplays: true });
   });
 
   it('rejects non-admins and bad windows', async () => {

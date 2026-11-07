@@ -1,6 +1,7 @@
 /**
  * Admin "Players" report: one row per user with what they use on the site (availability, Open Play,
- * tournaments, hosting, reliability, reachability, replays, questionnaire coverage). The admin UI
+ * tournaments, hosting, reliability, reachability, replays, questionnaire coverage, the weekly ban, the
+ * 3×3 matrix in Open Play, hidden replays). The admin UI
  * filters and aggregates these rows client-side (presets, funnel, KPIs, CSV, broadcast audience).
  * Plus two small aggregates: hosts and the schedule fit (availability vs. when events run). The Open
  * Play queue report (admin-queue-report.ts) shares the grid helpers.
@@ -12,6 +13,8 @@ import { BATTLE_TYPES } from '@rizzotto/types';
 import { localSlotNow, slotToInstant } from './availability-time.js';
 import { SITE_TZ } from './site-time.js';
 import { loadCalibrationQuestions } from './skill-classification-service.js';
+import { REPLAY_PRIVACY_AUDIT } from './replay-privacy.js';
+import { WEEKLY_BAN_AUDIT } from './weekly-ban.js';
 
 export const REPORT_BATTLE_TYPES = BATTLE_TYPES;
 type ReportBattleType = (typeof REPORT_BATTLE_TYPES)[number];
@@ -28,6 +31,8 @@ export interface ReportGame {
   source: 'QUEUE' | 'CHALLENGE' | 'AVAILABILITY' | null;
   tournamentId: string | null;
   hasReplay: boolean;
+  /** Open Play: factions picked with the 3×3 matrix (Match.pick_mode). */
+  matrix?: boolean;
   competitorIds: string[];
 }
 
@@ -52,6 +57,10 @@ export interface ReportUser {
   referralSource: string | null;
   /** Battle types (and "general") the player answered at least one questionnaire question for. */
   answered: { general: boolean } & Record<ReportBattleType, boolean>;
+  /** The weekly ban right now (faction name), and when the last one was set (kept after a drop). */
+  weeklyBan: string | null;
+  weeklyBanSetAt: Date | null;
+  hidesReplays: boolean;
 }
 
 export interface PlayerReportInput {
@@ -66,6 +75,8 @@ export interface PlayerReportInput {
   hosted: { userId: string; start: Date }[];
   queueEvents: { userId: string; event: string; at: Date }[];
   dms: { discordId: string; status: 'SENT' | 'FAILED' | 'SKIPPED' }[];
+  /** All-time AuditLog entries of the weekly ban and the hidden-replays option (WEEKLY_BAN_AUDIT, REPLAY_PRIVACY_AUDIT). */
+  featureEvents: { userId: string; action: string; at: Date }[];
 }
 
 export interface PlayerReportRow {
@@ -110,6 +121,15 @@ export interface PlayerReportRow {
   dmFailed: number;
   // questionnaire
   answered: ReportUser['answered'];
+  // Open Play picks: the weekly ban now, ever set (all time), drops (window); 3×3 matrix games (window)
+  weeklyBan: string | null;
+  weeklyBanSetAt: string | null;
+  everBanned: boolean;
+  banDrops: number;
+  openPlayMatrix: number;
+  // hidden replays: on now, ever on (all time)
+  hidesReplays: boolean;
+  everHidReplays: boolean;
 }
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
@@ -159,6 +179,13 @@ export function buildPlayerReportRows(input: PlayerReportInput): PlayerReportRow
       dmSent: 0,
       dmFailed: 0,
       answered: u.answered,
+      weeklyBan: u.weeklyBan,
+      weeklyBanSetAt: iso(u.weeklyBanSetAt),
+      everBanned: !!u.weeklyBanSetAt,
+      banDrops: 0,
+      openPlayMatrix: 0,
+      hidesReplays: u.hidesReplays,
+      everHidReplays: u.hidesReplays,
     };
     rows.set(u.id, row);
     byDiscord.set(u.discordId, row);
@@ -189,6 +216,7 @@ export function buildPlayerReportRows(input: PlayerReportInput): PlayerReportRow
       else if (g.source === 'CHALLENGE') r.openPlayChallenge++;
       else if (g.source === 'AVAILABILITY') r.openPlayAvailability++;
       else r.openPlayQueue++;
+      if (g.type === 'OPEN_PLAY' && g.matrix) r.openPlayMatrix++;
       if (g.hasReplay) r.gamesWithReplay++;
     }
   }
@@ -225,6 +253,15 @@ export function buildPlayerReportRows(input: PlayerReportInput): PlayerReportRow
     if (!r) continue;
     if (m.status === 'SENT') r.dmSent++;
     else if (m.status === 'FAILED') r.dmFailed++;
+  }
+
+  // An admin reset clears weekly_ban_set_at, so "ever" also reads the log.
+  for (const e of input.featureEvents) {
+    const r = rows.get(e.userId);
+    if (!r) continue;
+    if (e.action === WEEKLY_BAN_AUDIT.set) r.everBanned = true;
+    else if (e.action === WEEKLY_BAN_AUDIT.drop && e.at >= ws) r.banDrops++;
+    else if (e.action === REPLAY_PRIVACY_AUDIT.on) r.everHidReplays = true;
   }
 
   return [...rows.values()];
@@ -283,6 +320,7 @@ async function loadReportGames(prisma: PrismaClient): Promise<ReportGame[]> {
         select: {
           type: true,
           source: true,
+          pick_mode: true,
           tournament_id: true,
           player1_id: true,
           player2_id: true,
@@ -296,6 +334,7 @@ async function loadReportGames(prisma: PrismaClient): Promise<ReportGame[]> {
     source: g.match.source,
     tournamentId: g.match.tournament_id,
     hasReplay: !!g.replay_url,
+    matrix: g.match.pick_mode === 'MATRIX',
     competitorIds: [g.match.player1_id, g.match.player2_id].filter((x): x is string => !!x),
   }));
 }
@@ -338,6 +377,8 @@ export async function loadPlayerReport(
     hosted,
     queueEvents,
     dms,
+    factions,
+    featureEvents,
   ] = await Promise.all([
     prisma.user.findMany({
       where: { deleted_at: null },
@@ -352,6 +393,9 @@ export async function loadPlayerReport(
         discord_id: true,
         referral_source: true,
         calibration_answers: true,
+        weekly_ban_faction_id: true,
+        weekly_ban_set_at: true,
+        hide_replays: true,
         steam_link: { select: { user_id: true } },
       },
     }),
@@ -385,7 +429,16 @@ export async function loadPlayerReport(
       },
       select: { target_id: true, status: true },
     }),
+    prisma.faction.findMany({ select: { id: true, name: true } }),
+    prisma.auditLog.findMany({
+      where: {
+        entity_type: 'User',
+        action: { in: [WEEKLY_BAN_AUDIT.set, WEEKLY_BAN_AUDIT.drop, REPLAY_PRIVACY_AUDIT.on] },
+      },
+      select: { entity_id: true, action: true, created_at: true },
+    }),
   ]);
+  const factionName = new Map(factions.map((f) => [f.id, f.name]));
 
   return buildPlayerReportRows({
     windowStart,
@@ -401,6 +454,9 @@ export async function loadPlayerReport(
       steamVerified: !!u.steam_link,
       referralSource: u.referral_source,
       answered: answeredScopes(u.calibration_answers as Record<string, unknown> | null, questions),
+      weeklyBan: u.weekly_ban_faction_id ? (factionName.get(u.weekly_ban_faction_id) ?? u.weekly_ban_faction_id) : null,
+      weeklyBanSetAt: u.weekly_ban_set_at,
+      hidesReplays: u.hide_replays,
     })),
     slots: slots.map((s) => ({ userId: s.user_id, context: s.context })),
     tournamentPrefCustom: new Set(
@@ -421,6 +477,7 @@ export async function loadPlayerReport(
     hosted,
     queueEvents: queueEvents.map((e) => ({ userId: e.user_id, event: e.event, at: e.created_at })),
     dms: dms.map((m) => ({ discordId: m.target_id, status: m.status })),
+    featureEvents: featureEvents.map((e) => ({ userId: e.entity_id, action: e.action, at: e.created_at })),
   });
 }
 

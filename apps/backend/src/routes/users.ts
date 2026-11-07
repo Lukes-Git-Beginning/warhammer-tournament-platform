@@ -16,7 +16,7 @@ import { loadCalibrationQuestions, classifyWithModel, getClassificationModel } f
 import { SKILL_BATTLE_TYPES } from '../lib/skill-classification.js';
 import { SITE_NOTICES, activeNoticesFor, dismissNotice } from '../lib/site-notices.js';
 import { setWeeklyBan, weeklyBanOpensAt } from '../lib/weekly-ban.js';
-import { REPLAY_HIDE_DAYS } from '../lib/replay-privacy.js';
+import { REPLAY_HIDE_DAYS, setHideReplays } from '../lib/replay-privacy.js';
 
 const meSelect = {
   id: true,
@@ -260,7 +260,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.put('/api/users/me/replay-privacy', { preHandler: fastify.authenticate }, async (request, reply) => {
     const parsed = z.object({ hidden: z.boolean() }).safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: 'Expected { hidden }', statusCode: 400 });
-    await fastify.prisma.user.update({ where: { id: request.user.sub }, data: { hide_replays: parsed.data.hidden } });
+    await setHideReplays(fastify.prisma, request.user.sub, parsed.data.hidden);
     return { hidden: parsed.data.hidden, days: REPLAY_HIDE_DAYS };
   });
 

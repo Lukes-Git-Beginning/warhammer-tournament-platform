@@ -118,6 +118,22 @@ describe('hidden replays', () => {
     expect(await fileStatus(replayUrl, c)).toBe(200);
   });
 
+  it('logs each real change for the Players report', async () => {
+    const { a } = await people();
+    await hide(a, true);
+    await hide(a, true); // already on
+    await hide(a, false);
+    const log = await prisma.auditLog.findMany({
+      where: { entity_type: 'User', entity_id: a.id },
+      orderBy: { created_at: 'asc' },
+      select: { action: true, actor_id: true },
+    });
+    expect(log).toEqual([
+      { action: 'REPLAYS_HIDDEN_ON', actor_id: a.id },
+      { action: 'REPLAYS_HIDDEN_OFF', actor_id: a.id },
+    ]);
+  });
+
   it('reads the setting back', async () => {
     const { a } = await people();
     const get = async () => (await app.inject({ method: 'GET', url: '/api/users/me/replay-privacy', cookies: cookieFor(a) })).json();

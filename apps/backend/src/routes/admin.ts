@@ -56,6 +56,7 @@ import {
 import { mergeTournamentSources, mergeOverviewSources, type CountedRef } from '../lib/referrals.js';
 import { maybeSendSeriesInvite } from '../lib/series-notify.js';
 import { getOpenPlayGuilds, postJoinPanel, registerDiscordCommands, ROLLOUT_CONFIG_KEY, sendPreviewCard } from '../lib/discord-open-play.js';
+import { resetWeeklyBan } from '../lib/weekly-ban.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -552,11 +553,8 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // DELETE /api/admin/users/:id/weekly-ban — clear a player's weekly Open Play ban and its 7-day lock, so he can
   // set a new one at once. Matches already created keep their snapshot.
   fastify.delete<{ Params: { id: string } }>('/api/admin/users/:id/weekly-ban', async (request, reply) => {
-    const { count } = await fastify.prisma.user.updateMany({
-      where: { id: request.params.id },
-      data: { weekly_ban_faction_id: null, weekly_ban_set_at: null },
-    });
-    if (count === 0) return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
+    const found = await resetWeeklyBan(fastify.prisma, request.params.id, request.user.sub);
+    if (!found) return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
     return reply.code(200).send({ ok: true });
   });
 

@@ -20,6 +20,7 @@ export interface Preset {
   group:
     | 'Availability'
     | 'Play'
+    | 'Open Play picks'
     | 'Engagement'
     | 'Hosting & reliability'
     | 'Reach & replays'
@@ -119,6 +120,35 @@ export const PRESETS: Preset[] = [
     hint: 'Open Play games, no tournaments',
     test: (r) => openPlayGames(r) > 0 && r.tournamentGames === 0,
   },
+  // Open Play picks
+  {
+    id: 'weeklyBan',
+    group: 'Open Play picks',
+    label: 'Weekly ban',
+    hint: 'Has a weekly ban right now',
+    test: (r) => r.weeklyBan !== null,
+  },
+  {
+    id: 'everBanned',
+    group: 'Open Play picks',
+    label: 'Ever banned',
+    hint: 'Set a weekly ban at least once',
+    test: (r) => r.everBanned,
+  },
+  {
+    id: 'banDropped',
+    group: 'Open Play picks',
+    label: 'Dropped a ban',
+    hint: 'Dropped his weekly ban in the window',
+    test: (r) => r.banDrops > 0,
+  },
+  {
+    id: 'matrix',
+    group: 'Open Play picks',
+    label: 'Played the matrix',
+    hint: 'An Open Play game picked with the 3×3 matrix in the window',
+    test: (r) => r.openPlayMatrix > 0,
+  },
   // Engagement
   {
     id: 'active',
@@ -188,6 +218,20 @@ export const PRESETS: Preset[] = [
     label: 'DMs opted out',
     hint: 'No broadcasts or no bot messages at all',
     test: (r) => r.botPolicy !== 'NORMAL',
+  },
+  {
+    id: 'hidesReplays',
+    group: 'Reach & replays',
+    label: 'Hides replays',
+    hint: 'Keeps his replays hidden for 30 days, right now',
+    test: (r) => r.hidesReplays,
+  },
+  {
+    id: 'everHidReplays',
+    group: 'Reach & replays',
+    label: 'Ever hid replays',
+    hint: 'Turned on hidden replays at least once',
+    test: (r) => r.everHidReplays,
   },
   {
     id: 'lowReplay',
@@ -348,6 +392,13 @@ const CSV_COLUMNS: {
   { key: 'queue_warnings', get: (r) => r.queueWarnings },
   { key: 'queue_timeouts', get: (r) => r.queueTimeouts },
   { key: 'games_with_replay', get: (r) => r.gamesWithReplay },
+  { key: 'hides_replays', get: (r) => r.hidesReplays },
+  { key: 'ever_hid_replays', get: (r) => r.everHidReplays },
+  { key: 'weekly_ban', get: (r) => r.weeklyBan ?? '' },
+  { key: 'weekly_ban_set', get: (r) => r.weeklyBanSetAt?.slice(0, 10) ?? '' },
+  { key: 'ever_banned', get: (r) => r.everBanned },
+  { key: 'ban_drops', get: (r) => r.banDrops },
+  { key: 'open_play_matrix', get: (r) => r.openPlayMatrix },
   { key: 'dm_sent', get: (r) => r.dmSent },
   { key: 'dm_failed', get: (r) => r.dmFailed },
   { key: 'dm_policy', get: (r) => r.botPolicy },

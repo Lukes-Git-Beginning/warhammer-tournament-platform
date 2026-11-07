@@ -12,6 +12,15 @@ const LOCK_MS = WEEKLY_BAN_LOCK_DAYS * 24 * 60 * 60 * 1000;
 
 export type WeeklyBan = { userId: string; factionId: string };
 
+/** AuditLog actions for the weekly ban (entity User), read by the admin Players report: who uses it. */
+export const WEEKLY_BAN_AUDIT = { set: 'WEEKLY_BAN_SET', drop: 'WEEKLY_BAN_DROP', reset: 'WEEKLY_BAN_RESET' } as const;
+
+function banAudit(prisma: PrismaClient, userId: string, action: string, actorId: string, from: string | null, to: string | null) {
+  return prisma.auditLog.create({
+    data: { entity_type: 'User', entity_id: userId, action, actor_id: actorId, old_value: { factionId: from }, new_value: { factionId: to } },
+  });
+}
+
 /** When a new ban can be set again; null when it can be set now. */
 export function weeklyBanOpensAt(setAt: Date | null, now = new Date()): Date | null {
   if (!setAt) return null;
@@ -38,7 +47,10 @@ export async function setWeeklyBan(prisma: PrismaClient, userId: string, faction
     return { ok: true, factionId, setAt: user.weekly_ban_set_at };
   }
   if (factionId === null) {
-    await prisma.user.update({ where: { id: userId }, data: { weekly_ban_faction_id: null } });
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: userId }, data: { weekly_ban_faction_id: null } }),
+      banAudit(prisma, userId, WEEKLY_BAN_AUDIT.drop, userId, user.weekly_ban_faction_id, null),
+    ]);
     return { ok: true, factionId: null, setAt: user.weekly_ban_set_at };
   }
   const opensAt = weeklyBanOpensAt(user.weekly_ban_set_at);
@@ -47,8 +59,22 @@ export async function setWeeklyBan(prisma: PrismaClient, userId: string, faction
     return { ok: false, reason: 'unknown_faction' };
   }
   const setAt = new Date();
-  await prisma.user.update({ where: { id: userId }, data: { weekly_ban_faction_id: factionId, weekly_ban_set_at: setAt } });
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: userId }, data: { weekly_ban_faction_id: factionId, weekly_ban_set_at: setAt } }),
+    banAudit(prisma, userId, WEEKLY_BAN_AUDIT.set, userId, user.weekly_ban_faction_id, factionId),
+  ]);
   return { ok: true, factionId, setAt };
+}
+
+/** Admin: clear a player's ban together with its lock, so he can set a new one at once. False = no such user. */
+export async function resetWeeklyBan(prisma: PrismaClient, userId: string, adminId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { weekly_ban_faction_id: true } });
+  if (!user) return false;
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: userId }, data: { weekly_ban_faction_id: null, weekly_ban_set_at: null } }),
+    banAudit(prisma, userId, WEEKLY_BAN_AUDIT.reset, adminId, user.weekly_ban_faction_id, null),
+  ]);
+  return true;
 }
 
 /** The weekly bans of these players right now, for the snapshot a new Open Play match takes. */

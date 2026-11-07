@@ -1724,6 +1724,16 @@ export interface AdminPlayerReportRow {
   dmSent: number;
   dmFailed: number;
   answered: { general: boolean } & Record<BattleType, boolean>;
+  /** Weekly ban right now (faction name) and when the last one was set; ever set (all time); drops (window). */
+  weeklyBan: string | null;
+  weeklyBanSetAt: string | null;
+  everBanned: boolean;
+  banDrops: number;
+  /** Open Play games picked with the 3×3 matrix in the window. */
+  openPlayMatrix: number;
+  /** Hidden replays: on right now; ever on (all time). */
+  hidesReplays: boolean;
+  everHidReplays: boolean;
 }
 export function getAdminPlayersReport(days: number): Promise<{ days: number; players: AdminPlayerReportRow[] }> {
   return apiFetch(`/api/admin/reports/players?days=${days}`);

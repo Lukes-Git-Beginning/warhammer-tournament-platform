@@ -117,6 +117,27 @@ describe('weekly ban on the profile', () => {
     expect((await setBan(p1.id, factions[2]!)).statusCode).toBe(200);
   });
 
+  it('logs every set, drop and admin reset, and nothing for a no-op', async () => {
+    const { p1, p2 } = await players();
+    await prisma.user.update({ where: { id: p2.id }, data: { role: 'ADMIN' } });
+    await setBan(p1.id, factions[0]!);
+    await setBan(p1.id, factions[0]!); // same again: no-op
+    await setBan(p1.id, factions[1]!); // locked: no change
+    await setBan(p1.id, null);
+    await setBan(p1.id, null); // nothing left to drop
+    await app.inject({ method: 'DELETE', url: `/api/admin/users/${p1.id}/weekly-ban`, cookies: cookieFor(p2.id, 'ADMIN') });
+    const log = await prisma.auditLog.findMany({
+      where: { entity_type: 'User', entity_id: p1.id },
+      orderBy: { created_at: 'asc' },
+      select: { action: true, actor_id: true, old_value: true, new_value: true },
+    });
+    expect(log).toEqual([
+      { action: 'WEEKLY_BAN_SET', actor_id: p1.id, old_value: { factionId: null }, new_value: { factionId: factions[0] } },
+      { action: 'WEEKLY_BAN_DROP', actor_id: p1.id, old_value: { factionId: factions[0] }, new_value: { factionId: null } },
+      { action: 'WEEKLY_BAN_RESET', actor_id: p2.id, old_value: { factionId: null }, new_value: { factionId: null } },
+    ]);
+  });
+
   it('rejects an unknown faction', async () => {
     const { p1 } = await players();
     expect((await setBan(p1.id, 'no_such_faction')).statusCode).toBe(400);

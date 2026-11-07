@@ -46,6 +46,7 @@ type SortKey =
   | 'lastGame'
   | 'tournament'
   | 'openPlay'
+  | 'ban'
   | 'avail'
   | 'hosted'
   | 'reliability'
@@ -58,6 +59,7 @@ const SORTERS: Record<SortKey, (r: AdminPlayerReportRow) => number | string> = {
   lastGame: (r) => r.lastGameAt ?? '',
   tournament: (r) => r.tournamentGames,
   openPlay: (r) => openPlayGames(r),
+  ban: (r) => r.weeklyBan ?? '',
   avail: (r) => r.mmSlots + r.tournamentSlots,
   hosted: (r) => r.hosted * 1000 + r.hostedTotal,
   reliability: (r) => r.noShows * 3 + r.queueTimeouts * 3 + r.queueWarnings + r.drops,
@@ -328,6 +330,12 @@ export function PlayersReport({ days }: { days: number }) {
               >
                 Open Play
               </Th>
+              <Th
+                k="ban"
+                title="Weekly ban right now · Open Play games picked with the 3×3 matrix in the window"
+              >
+                Ban · Matrix
+              </Th>
               <Th k="avail" title="Calendar slots: matchmaking / tournaments">
                 Avail.
               </Th>
@@ -379,6 +387,11 @@ export function PlayersReport({ days }: { days: number }) {
                         no DMs
                       </span>
                     )}
+                    {r.hidesReplays && (
+                      <span className="ml-1.5 rounded bg-stone-800 px-1 text-[10px] text-stone-400">
+                        replays hidden
+                      </span>
+                    )}
                     {notInDiscord?.has(r.id) && (
                       <span className="ml-1.5 rounded bg-stone-800 px-1 text-[10px] text-stone-400">
                         not in Discord
@@ -390,6 +403,11 @@ export function PlayersReport({ days }: { days: number }) {
                   <td className="px-2 py-1.5">
                     {op
                       ? `${op} (${r.openPlayQueue}/${r.openPlayAvailability}/${r.openPlayChallenge})`
+                      : '·'}
+                  </td>
+                  <td className="px-2 py-1.5">
+                    {r.weeklyBan || r.openPlayMatrix
+                      ? `${r.weeklyBan ?? '·'} · ${r.openPlayMatrix || '·'}`
                       : '·'}
                   </td>
                   <td className="px-2 py-1.5">

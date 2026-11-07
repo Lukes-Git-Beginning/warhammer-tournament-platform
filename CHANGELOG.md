@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [3.2.0] — 2026-11-08
+
+### Added
+- **Admin: the Players report shows who uses the new picking options.** Each player's weekly ban, whether he ever set one and how often he dropped it, his Open Play games with the 3×3 matrix, and whether he hides his replays (now and ever). With filters and in the CSV export.
+
 ## [3.1.1] — 2026-11-08
 
 ### Changed
