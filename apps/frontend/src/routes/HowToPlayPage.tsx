@@ -353,7 +353,7 @@ export function HowToPlayPage() {
               Battle or Conquest uses the 3×3 matrix instead, anew before every game: you each name three factions blind,
               then take turns striking matchups in the grid until two are left, and the coin-toss winner picks the one you
               play. Your weekly ban, set on your profile, is banned for both players in all your Open Play matches. You can
-              change it once every 7 days.
+              change it once every 7 days, and drop it any time.
             </li>
             <li>
               One of you hosts the lobby in the right arena mode and enters the lobby code and password on the match

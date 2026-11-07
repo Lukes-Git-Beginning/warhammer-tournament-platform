@@ -176,9 +176,14 @@ const MATCH_FORMATS = ALL_QUEUE_MATCH_FORMATS as readonly string[];
 async function handleJoinDm(fastify: FastifyInstance, i: Interaction, userId: string, action: string, parts: string[]) {
   const values = i.data?.values ?? [];
 
-  // The weekly ban: choosing one asks first (it locks for 7 days), then it is set.
-  if (action === 'oq_ban') return update(await renderJoinDm(fastify, userId, undefined, values[0]));
+  // The weekly ban: choosing one asks first (it locks for 7 days), then it is set. Dropping it asks first too.
+  if (action === 'oq_ban') return update(await renderJoinDm(fastify, userId, undefined, values[0] ? { set: values[0] } : undefined));
   if (action === 'oq_banno') return update(await renderJoinDm(fastify, userId));
+  if (action === 'oq_bandrop') return update(await renderJoinDm(fastify, userId, undefined, { drop: true }));
+  if (action === 'oq_bandropok') {
+    await setWeeklyBan(fastify.prisma, userId, null);
+    return update(await renderJoinDm(fastify, userId, '✅ Your weekly ban is dropped.'));
+  }
   if (action === 'oq_banok') {
     const result = await setWeeklyBan(fastify.prisma, userId, parts[0] ?? null);
     const note = result.ok

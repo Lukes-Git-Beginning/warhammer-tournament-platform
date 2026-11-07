@@ -186,7 +186,8 @@ channel, so views can't be measured.
 2. **Bo1 stays as today** (random map, blind pick).
 3. **Weekly ban on the player profile.** Each player sets one faction there and can change it 7 days later at the
    earliest. In every Open Play match of his, that faction is banned for both players, so up to two per match. The
-   ban lives on the profile, not per match or game.
+   ban lives on the profile, not per match or game. Added 2026-11-08 (Alex): it can be **dropped any time**; the drop
+   doesn't restart the 7 days, so a new ban still waits for them (v3.1.1).
 4. The VL's pick 3 / ban 1 and its 2 preset bans per player **don't come**.
 5. **No VL extra limits:** the Fruit Rules are enough (the VL didn't bring it up again after the call).
 
@@ -238,8 +239,9 @@ matrix is Bo3 only, so it needs this; it can also ship alone.
 **Weekly ban:**
 
 - `User.weekly_ban_faction_id` + `User.weekly_ban_set_at`. `PUT /api/users/me/weekly-ban { factionId | null }`:
-  the first one any time, every change (clearing too) 7 days after the last one at the earliest; otherwise 409 with
-  the date it opens. An admin can reset it on the user view.
+  the first one any time, every new one 7 days after the last one was set at the earliest; otherwise 409 with the
+  date it opens. `null` drops it at any time and leaves `weekly_ban_set_at` alone, so the lock keeps running
+  (2026-11-08). An admin can reset it on the user view (clears the lock too).
 - Snapshot onto the match at creation (`Match.weekly_bans`, `[{ userId, factionId }]`: two in 1v1, up to four in
   2v2), so a series keeps its bans if one changes in between, and the match can say whose ban it was.
 - Enforcement: `openPlayBannedFactionIds(match)` already feeds the decision payload, the blind-pick lock and the DM
@@ -247,7 +249,8 @@ matrix is Bo3 only, so it needs this; it can also ship alone.
 - Own profile: "Weekly Open Play ban" with a faction select and "You can change it on <date>". Shown on every profile
   (it shows in every match anyway). No ban set = nothing banned.
 - Match page and DM card: "Banned: Empire (A's weekly ban), Dwarfs (B's weekly ban)".
-- Join DM: shows the current ban, with a select while it is changeable (the VL players live in Discord).
+- Join DM: shows the current ban, with a select while it is changeable (the VL players live in Discord), and a
+  "Drop weekly ban" button with a confirm (`oq_bandrop` → `oq_bandropok`).
 - Copy: Open Play page, How to Play, CHANGELOG.
 
 **Build order:** (1) the series timeout fix; (2) weekly ban; (3) matrix in Open Play on the site; (4) matrix on the

@@ -2,16 +2,17 @@ import type { PrismaClient, Prisma } from '@rizzotto/db';
 
 /**
  * Weekly Open Play ban (VL picking, plans/discord-open-play.md §11): every player may set one faction on his
- * profile. In each of his Open Play matches it is banned for both sides. He can change it (clearing included)
- * WEEKLY_BAN_LOCK_DAYS after the last change at the earliest, so nobody re-targets it per opponent. A match keeps
- * the bans as they stood at its creation (Match.weekly_bans), so a series never changes them in between.
+ * profile. In each of his Open Play matches it is banned for both sides. He can set a new one WEEKLY_BAN_LOCK_DAYS
+ * after the last one was set at the earliest, so nobody re-targets it per opponent. Dropping it (no ban) works any
+ * time and leaves that lock running (Alex 2026-11-08): it only ever lifts a ban, so it can't target anyone. A match
+ * keeps the bans as they stood at its creation (Match.weekly_bans), so a series never changes them in between.
  */
 export const WEEKLY_BAN_LOCK_DAYS = 7;
 const LOCK_MS = WEEKLY_BAN_LOCK_DAYS * 24 * 60 * 60 * 1000;
 
 export type WeeklyBan = { userId: string; factionId: string };
 
-/** When the ban can be changed again; null when it can be changed now. */
+/** When a new ban can be set again; null when it can be set now. */
 export function weeklyBanOpensAt(setAt: Date | null, now = new Date()): Date | null {
   if (!setAt) return null;
   const opens = new Date(setAt.getTime() + LOCK_MS);
@@ -24,8 +25,9 @@ export type SetWeeklyBanResult =
   | { ok: false; reason: 'unknown_faction' };
 
 /**
- * Set (or clear, with null) a player's weekly ban. The same faction again is a no-op that keeps the lock running
- * from the original change. The single entry point for the site route and the join DM.
+ * Set a player's weekly ban, or drop it with null. Setting waits for the lock; dropping never does and keeps the
+ * lock running from the last set (so a drop can't be followed by a new ban before the week is up). The same faction
+ * again is a no-op that keeps the lock too. The single entry point for the site route and the join DM.
  */
 export async function setWeeklyBan(prisma: PrismaClient, userId: string, factionId: string | null): Promise<SetWeeklyBanResult> {
   const user = await prisma.user.findUniqueOrThrow({
@@ -35,9 +37,13 @@ export async function setWeeklyBan(prisma: PrismaClient, userId: string, faction
   if (user.weekly_ban_faction_id === factionId) {
     return { ok: true, factionId, setAt: user.weekly_ban_set_at };
   }
+  if (factionId === null) {
+    await prisma.user.update({ where: { id: userId }, data: { weekly_ban_faction_id: null } });
+    return { ok: true, factionId: null, setAt: user.weekly_ban_set_at };
+  }
   const opensAt = weeklyBanOpensAt(user.weekly_ban_set_at);
   if (opensAt) return { ok: false, reason: 'locked', opensAt };
-  if (factionId && !(await prisma.faction.findUnique({ where: { id: factionId }, select: { id: true } }))) {
+  if (!(await prisma.faction.findUnique({ where: { id: factionId }, select: { id: true } }))) {
     return { ok: false, reason: 'unknown_faction' };
   }
   const setAt = new Date();

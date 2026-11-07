@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [3.1.1] — 2026-11-08
+
+### Changed
+- **You can drop your weekly ban any time.** On your profile, or with the new button in the queue DM on Discord. The 7 days keep running from when you set it, so a new ban still waits for them. Matches already under way keep the ban they started with.
+
 ## [3.1.0] — 2026-11-07
 
 ### Added

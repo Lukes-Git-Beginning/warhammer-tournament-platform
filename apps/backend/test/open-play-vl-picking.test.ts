@@ -79,7 +79,7 @@ const matrixStrike = (matchId: string, userId: string, row: number, col: number)
   app.inject({ method: 'POST', url: `/api/matches/${matchId}/matrix/ban`, cookies: cookieFor(userId), payload: { row, col } });
 
 describe('weekly ban on the profile', () => {
-  it('sets one at once, then locks every change (clearing too) for 7 days', async () => {
+  it('sets one at once, then locks every new one for 7 days', async () => {
     const { p1 } = await players();
     expect((await setBan(p1.id, factions[0]!)).statusCode).toBe(200);
 
@@ -87,7 +87,6 @@ describe('weekly ban on the profile', () => {
     expect(again.statusCode).toBe(409);
     const opensAt = new Date(again.json().opensAt as string).getTime();
     expect(Math.abs(opensAt - (Date.now() + WEEKLY_BAN_LOCK_DAYS * DAY))).toBeLessThan(60_000);
-    expect((await setBan(p1.id, null)).statusCode).toBe(409);
     // The same faction again changes nothing, and doesn't restart the lock.
     expect((await setBan(p1.id, factions[0]!)).statusCode).toBe(200);
 
@@ -97,6 +96,25 @@ describe('weekly ban on the profile', () => {
     const pub = (await app.inject({ method: 'GET', url: `/api/users/${p1.id}/weekly-ban` })).json();
     expect(pub.factionId).toBe(factions[1]);
     expect(pub.opensAt).not.toBeNull();
+  });
+
+  it('can be dropped any time, and the drop leaves the lock running', async () => {
+    const { p1 } = await players();
+    const set = (await setBan(p1.id, factions[0]!)).json();
+
+    const dropped = await setBan(p1.id, null);
+    expect(dropped.statusCode).toBe(200);
+    expect(dropped.json()).toMatchObject({ factionId: null, opensAt: set.opensAt });
+    // No new ban before the week is up, and dropping again changes nothing.
+    expect((await setBan(p1.id, factions[1]!)).statusCode).toBe(409);
+    expect((await setBan(p1.id, null)).json()).toMatchObject({ factionId: null, opensAt: set.opensAt });
+
+    // A drop after the week doesn't start a new lock either.
+    await prisma.user.update({ where: { id: p1.id }, data: { weekly_ban_set_at: ago(WEEKLY_BAN_LOCK_DAYS * DAY + 1000) } });
+    expect((await setBan(p1.id, factions[1]!)).statusCode).toBe(200);
+    await prisma.user.update({ where: { id: p1.id }, data: { weekly_ban_set_at: ago(WEEKLY_BAN_LOCK_DAYS * DAY + 1000) } });
+    expect((await setBan(p1.id, null)).json()).toMatchObject({ factionId: null, opensAt: null });
+    expect((await setBan(p1.id, factions[2]!)).statusCode).toBe(200);
   });
 
   it('rejects an unknown faction', async () => {

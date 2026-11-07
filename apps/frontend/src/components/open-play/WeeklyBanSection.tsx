@@ -6,8 +6,9 @@ import { formatInUserTimezone } from '@/lib/timezone';
 
 /**
  * The weekly Open Play ban on a profile (plans/discord-open-play.md §11): one faction, banned for both players in
- * every Open Play match of its owner, changeable 7 days after the last change. Editable on your own profile, shown
- * on everyone's once set; an admin can clear it together with its lock.
+ * every Open Play match of its owner. A new one can be set 7 days after the last one; dropping it works any time and
+ * leaves that lock running. Editable on your own profile, shown on everyone's once set; an admin can clear it
+ * together with its lock.
  */
 export function WeeklyBanSection({ userId, isOwn, isAdmin }: { userId: string; isOwn: boolean; isAdmin: boolean }) {
   const qc = useQueryClient();
@@ -33,12 +34,19 @@ export function WeeklyBanSection({ userId, isOwn, isAdmin }: { userId: string; i
   const nameOf = (id: string | null) => (id ? (factions.find((f) => f.id === id)?.name ?? id) : 'No ban');
   const opensAt = ban.opensAt ? formatInUserTimezone(ban.opensAt) : null;
   const value = draft ?? ban.factionId ?? '';
-  const changed = value !== (ban.factionId ?? '');
+  const changed = value !== '' && value !== ban.factionId;
 
   function submit() {
-    const next = value || null;
-    if (!window.confirm(`Make ${nameOf(next)} your weekly ban? You can't change it again for 7 days.`)) return;
-    save.mutate(next);
+    if (!window.confirm(`Make ${nameOf(value)} your weekly ban? You can't change it again for 7 days.`)) return;
+    save.mutate(value);
+  }
+
+  const savedName = nameOf(ban.factionId);
+  function drop() {
+    const newOne = opensAt ? `You can set a new one on ${opensAt}.` : 'You can set a new one any time.';
+    const text = `Drop your weekly ban? ${savedName} is no longer banned in your new Open Play matches; matches already under way keep it. ${newOne}`;
+    if (!window.confirm(text)) return;
+    save.mutate(null);
   }
 
   return (
@@ -53,7 +61,7 @@ export function WeeklyBanSection({ userId, isOwn, isAdmin }: { userId: string; i
               onChange={(e) => setDraft(e.target.value)}
               className="rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none disabled:opacity-60"
             >
-              <option value="">No ban</option>
+              {!ban.factionId && <option value="">No ban</option>}
               {factions.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.name}
@@ -68,10 +76,24 @@ export function WeeklyBanSection({ userId, isOwn, isAdmin }: { userId: string; i
             >
               {save.isPending ? 'Saving…' : 'Save'}
             </button>
+            {ban.factionId && (
+              <button
+                type="button"
+                onClick={drop}
+                disabled={save.isPending}
+                className="rounded border border-stone-700 px-3 py-1.5 text-sm text-stone-400 hover:border-stone-500 hover:text-stone-200 disabled:opacity-40 transition-colors"
+              >
+                Drop ban
+              </button>
+            )}
           </div>
           <p className="mt-2 text-xs text-stone-500">
             Banned for both players in every Open Play match of yours.{' '}
-            {opensAt ? `You can change it on ${opensAt}.` : 'Once saved, you can change it again after 7 days.'}
+            {opensAt
+              ? ban.factionId
+                ? `You can change it on ${opensAt}, or drop it any time.`
+                : `You can set a new one on ${opensAt}.`
+              : 'Once saved, you can change it again after 7 days, and drop it any time.'}
           </p>
           {save.error && <p className="mt-1 text-xs text-red-400">{save.error.message}</p>}
         </>
@@ -83,7 +105,7 @@ export function WeeklyBanSection({ userId, isOwn, isAdmin }: { userId: string; i
       ) : (
         <p className="text-sm text-stone-500">No weekly ban set.</p>
       )}
-      {isAdmin && ban.factionId && (
+      {isAdmin && (ban.factionId || ban.opensAt) && (
         <button
           type="button"
           onClick={() => reset.mutate()}

@@ -208,7 +208,12 @@ async function queueableTeams(fastify: FastifyInstance, userId: string): Promise
  * multi-selects, team size as a single select, the team for 2v2), preset from the stored settings.
  * Every change is saved straight away, like on the site. While queued it shows the entry + Leave.
  */
-export async function renderJoinDm(fastify: FastifyInstance, userId: string, note?: string, banDraft?: string): Promise<DiscordMessage> {
+export async function renderJoinDm(
+  fastify: FastifyInstance,
+  userId: string,
+  note?: string,
+  banStep?: { set: string } | { drop: true },
+): Promise<DiscordMessage> {
   const openPlayLink = linkBtn('Open Play page', `${siteUrl()}/open-play`);
   const noteLine = note ? `\n\n${note}` : '';
   const queued = await findQueuedEntry(fastify, userId);
@@ -225,18 +230,29 @@ export async function renderJoinDm(fastify: FastifyInstance, userId: string, not
   const teams = is2v2 ? await queueableTeams(fastify, userId) : [];
   const team = teams.find((t) => t.id === stored.teamId) ?? teams[0];
 
-  // The weekly ban (VL picking): shown here, set or changed here while it isn't locked.
+  // The weekly ban (VL picking): shown here, set or changed here while it isn't locked, dropped here any time.
   const [me, factions] = await Promise.all([
     fastify.prisma.user.findUnique({ where: { id: userId }, select: { weekly_ban_faction_id: true, weekly_ban_set_at: true } }),
     fastify.prisma.faction.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
   ]);
   const banName = me?.weekly_ban_faction_id ? (factions.find((f) => f.id === me.weekly_ban_faction_id)?.name ?? me.weekly_ban_faction_id) : null;
   const banOpensAt = weeklyBanOpensAt(me?.weekly_ban_set_at ?? null);
-  const draftName = banDraft && !banOpensAt ? factions.find((f) => f.id === banDraft)?.name : undefined;
+  const banDraft = banStep && 'set' in banStep && !banOpensAt ? banStep.set : undefined;
+  const draftName = banDraft ? factions.find((f) => f.id === banDraft)?.name : undefined;
   if (banDraft && draftName) {
     return {
       content: `**Make ${draftName} your weekly ban?**\nIt is banned for both players in all your Open Play matches, and you can't change it again for 7 days.`,
       components: [row(btn(`Ban ${draftName}`.slice(0, 80), `oq_banok:${banDraft}`, DANGER), btn('Back', 'oq_banno'))],
+      allowed_mentions: noMentions,
+    };
+  }
+  if (banStep && 'drop' in banStep && banName) {
+    const newOne = banOpensAt ? `You can set a new one <t:${Math.floor(banOpensAt.getTime() / 1000)}:R>.` : 'You can set a new one any time.';
+    return {
+      content:
+        `**Drop your weekly ban?**\n${banName} is no longer banned in your new Open Play matches; matches already under way keep it. ` +
+        newOne,
+      components: [row(btn('Drop ban', 'oq_bandropok', DANGER), btn('Back', 'oq_banno'))],
       allowed_mentions: noMentions,
     };
   }
@@ -259,13 +275,18 @@ export async function renderJoinDm(fastify: FastifyInstance, userId: string, not
     );
   }
   const cannot2v2 = is2v2 && teams.length === 0;
-  components.push(row(btn('Join queue', 'oq_join', SUCCESS, cannot2v2), openPlayLink));
+  components.push(
+    row(btn('Join queue', 'oq_join', SUCCESS, cannot2v2), ...(banName ? [btn('Drop weekly ban', 'oq_bandrop', SECONDARY)] : []), openPlayLink),
+  );
 
   const teamLine = is2v2 && team ? `\nTeam: **${team.name}**` : '';
   const blockLine = cannot2v2 ? '\n\nFor 2v2 you need to be the captain of an active team with two members.' : '';
+  const banOpensTs = banOpensAt ? `<t:${Math.floor(banOpensAt.getTime() / 1000)}:R>` : null;
   const banLine = banName
-    ? `\n🚫 Weekly ban: **${banName}**, banned for both players in your matches.${banOpensAt ? ` You can change it <t:${Math.floor(banOpensAt.getTime() / 1000)}:R>.` : ''}`
-    : '\n🚫 Weekly ban: none. You can ban one faction for both players in all your matches.';
+    ? `\n🚫 Weekly ban: **${banName}**, banned for both players in your matches.${banOpensTs ? ` You can change it ${banOpensTs}, or drop it any time.` : ''}`
+    : banOpensTs
+      ? `\n🚫 Weekly ban: none. You can set a new one ${banOpensTs}.`
+      : '\n🚫 Weekly ban: none. You can ban one faction for both players in all your matches.';
   return {
     content:
       `**Find an Open Play game**\nPick what you want to play, then join the queue. Your choice is saved, like on the Open Play page. ` +

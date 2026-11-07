@@ -206,6 +206,30 @@ describe('join DM', () => {
     expect(customIds(done.data.components)).not.toContain('oq_ban');
   });
 
+  it('drops the weekly ban after asking, and keeps its lock', async () => {
+    const u = await player('dop_bandrop');
+    const faction = await prisma.faction.findFirstOrThrow({ orderBy: { name: 'asc' }, select: { id: true, name: true } });
+    const setAt = new Date();
+    await prisma.user.update({ where: { id: u.id }, data: { weekly_ban_faction_id: faction.id, weekly_ban_set_at: setAt } });
+    type Res = { type: number; data: { content: string; components: object[] } };
+    expect(customIds((await renderJoinDm(app, u.id)).components)).toContain('oq_bandrop');
+
+    const ask = (await handleOpenPlayInteraction(app, interaction(u, 3, { custom_id: 'oq_bandrop' }))) as Res;
+    expect(ask.data.content).toContain('Drop your weekly ban?');
+    expect(ask.data.content).toContain(`${faction.name} is no longer banned`);
+    expect(customIds(ask.data.components)).toEqual(['oq_bandropok', 'oq_banno']);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: u.id } })).weekly_ban_faction_id).toBe(faction.id);
+
+    const done = (await handleOpenPlayInteraction(app, interaction(u, 3, { custom_id: 'oq_bandropok' }))) as Res;
+    const after = await prisma.user.findUniqueOrThrow({ where: { id: u.id } });
+    expect(after.weekly_ban_faction_id).toBeNull();
+    expect(after.weekly_ban_set_at?.getTime()).toBe(setAt.getTime());
+    expect(done.data.content).toContain('Your weekly ban is dropped.');
+    expect(done.data.content).toContain('Weekly ban: none. You can set a new one <t:');
+    expect(customIds(done.data.components)).not.toContain('oq_bandrop');
+    expect(customIds(done.data.components)).not.toContain('oq_ban');
+  });
+
   it('2v2 without a team: Join is disabled', async () => {
     const u = await player('dop_2v2');
     const res = (await handleOpenPlayInteraction(app, interaction(u, 3, { custom_id: 'oq_size', values: ['TWO_V_TWO'] }))) as { data: { components: object[]; content: string } };

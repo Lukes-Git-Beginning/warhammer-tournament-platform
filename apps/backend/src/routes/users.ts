@@ -229,7 +229,8 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     };
   });
 
-  // PUT /api/users/me/weekly-ban — set (or clear, with null) your weekly Open Play ban. 409 while it's locked.
+  // PUT /api/users/me/weekly-ban — set your weekly Open Play ban (409 while it's locked), or drop it with null (any
+  // time; the lock keeps running).
   fastify.put('/api/users/me/weekly-ban', { preHandler: fastify.authenticate }, async (request, reply) => {
     const parsed = z.object({ factionId: z.string().min(1).nullable() }).safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: 'Expected { factionId }', statusCode: 400 });
