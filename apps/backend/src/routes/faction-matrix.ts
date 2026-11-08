@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { randomBytes, randomInt } from 'node:crypto';
 import { ensureOneVThreeDecision } from '../lib/one-v-three.js';
 import { revealedBans } from '../lib/blind-pick-auto-resolve.js';
-import { openPlayBannedFactionIds } from '../lib/standard-ruleset.js';
+import { openPlayBannedFactionIds } from '../lib/weekly-ban.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas

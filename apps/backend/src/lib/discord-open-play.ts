@@ -28,8 +28,7 @@ import { getStoredQueuePrefs } from './queue-prefs.js';
 import { mapNameFromTerrain } from './replay-maps.js';
 import { parseReplayMeta } from './replay-parser.js';
 import { startOfSiteDay } from './site-time.js';
-import { openPlayBannedFactionIds } from './standard-ruleset.js';
-import { matchWeeklyBans, weeklyBanOpensAt, type WeeklyBan } from './weekly-ban.js';
+import { matchWeeklyBans, openPlayBannedFactionIds, readWeeklyBan, type WeeklyBan } from './weekly-ban.js';
 
 // ---------------------------------------------------------------------------
 // Discord wire format
@@ -230,14 +229,16 @@ export async function renderJoinDm(
   const teams = is2v2 ? await queueableTeams(fastify, userId) : [];
   const team = teams.find((t) => t.id === stored.teamId) ?? teams[0];
 
-  // The weekly ban (VL picking): shown here, set or changed here while it isn't locked, dropped here any time.
-  const [me, factions] = await Promise.all([
-    fastify.prisma.user.findUnique({ where: { id: userId }, select: { weekly_ban_faction_id: true, weekly_ban_set_at: true } }),
+  // The weekly ban (VL picking): shown here, set or changed here while it isn't locked, dropped here any time. A faction
+  // the Standard Ruleset bans everywhere isn't offered.
+  const [ban, factions] = await Promise.all([
+    readWeeklyBan(fastify.prisma, userId),
     fastify.prisma.faction.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
   ]);
-  const banName = me?.weekly_ban_faction_id ? (factions.find((f) => f.id === me.weekly_ban_faction_id)?.name ?? me.weekly_ban_faction_id) : null;
-  const banOpensAt = weeklyBanOpensAt(me?.weekly_ban_set_at ?? null);
-  const banDraft = banStep && 'set' in banStep && !banOpensAt ? banStep.set : undefined;
+  const banName = ban?.factionId ? (factions.find((f) => f.id === ban.factionId)?.name ?? ban.factionId) : null;
+  const banOpensAt = ban?.opensAt ?? null;
+  const banOptions = factions.filter((f) => !ban?.rulesetBanned.includes(f.id));
+  const banDraft = banStep && 'set' in banStep && !banOpensAt && banOptions.some((f) => f.id === banStep.set) ? banStep.set : undefined;
   const draftName = banDraft ? factions.find((f) => f.id === banDraft)?.name : undefined;
   if (banDraft && draftName) {
     return {
@@ -269,9 +270,9 @@ export async function renderJoinDm(
     components.push(row(select('oq_team', teams.map((t) => ({ label: t.name.slice(0, 100), value: t.id, default: t.id === team?.id })), 1, 1, 'Queue as team')));
   }
   // Discord allows 5 rows: the ban select only fits without the team select (and while it can change).
-  if (!banOpensAt && factions.length <= 25 && components.length < 4) {
+  if (!banOpensAt && banOptions.length <= 25 && components.length < 4) {
     components.push(
-      row(select('oq_ban', factions.map((f) => ({ label: f.name, value: f.id, default: f.id === me?.weekly_ban_faction_id })), 1, 1, banName ? 'Change your weekly ban' : 'Set a weekly ban')),
+      row(select('oq_ban', banOptions.map((f) => ({ label: f.name, value: f.id, default: f.id === ban?.factionId })), 1, 1, banName ? 'Change your weekly ban' : 'Set a weekly ban')),
     );
   }
   const cannot2v2 = is2v2 && teams.length === 0;
@@ -282,7 +283,9 @@ export async function renderJoinDm(
   const teamLine = is2v2 && team ? `\nTeam: **${team.name}**` : '';
   const blockLine = cannot2v2 ? '\n\nFor 2v2 you need to be the captain of an active team with two members.' : '';
   const banOpensTs = banOpensAt ? `<t:${Math.floor(banOpensAt.getTime() / 1000)}:R>` : null;
-  const banLine = banName
+  const banLine = ban?.covered
+    ? `\n🚫 Weekly ban: **${banName}**, which the Standard Ruleset already bans in every Open Play game. You can pick another one now.`
+    : banName
     ? `\n🚫 Weekly ban: **${banName}**, banned for both players in your matches.${banOpensTs ? ` You can change it ${banOpensTs}, or drop it any time.` : ''}`
     : banOpensTs
       ? `\n🚫 Weekly ban: none. You can set a new one ${banOpensTs}.`

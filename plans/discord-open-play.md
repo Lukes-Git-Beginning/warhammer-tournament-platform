@@ -242,6 +242,10 @@ matrix is Bo3 only, so it needs this; it can also ship alone.
   the first one any time, every new one 7 days after the last one was set at the earliest; otherwise 409 with the
   date it opens. `null` drops it at any time and leaves `weekly_ban_set_at` alone, so the lock keeps running
   (2026-11-08). An admin can reset it on the user view (clears the lock too).
+- A faction the Standard Ruleset bans in every combo (`standardBannedEverywhereFactionIds()`, today Undead Legions)
+  can't be the weekly ban (400): it would ban nothing, so neither the profile nor the join DM offers it. A ban set on
+  one before (or before an admin banned it everywhere) is "covered": it holds no lock, the profile and the DM say so,
+  and dropping it clears `weekly_ban_set_at` too (2026-11-08).
 - Snapshot onto the match at creation (`Match.weekly_bans`, `[{ userId, factionId }]`: two in 1v1, up to four in
   2v2), so a series keeps its bans if one changes in between, and the match can say whose ban it was.
 - Enforcement: `openPlayBannedFactionIds(match)` already feeds the decision payload, the blind-pick lock and the DM

@@ -10,7 +10,8 @@ import type { FastifyInstance } from 'fastify';
 import { prisma } from '@rizzotto/db';
 import { buildApp } from '../src/app.js';
 import { createOpenPlayMatch } from '../src/lib/create-open-play-match.js';
-import { openPlayBannedFactionIds, standardBannedFactionIds, STANDARD_RULESET_CONFIG_KEY } from '../src/lib/standard-ruleset.js';
+import { standardBannedEverywhereFactionIds, standardBannedFactionIds, STANDARD_RULESET_CONFIG_KEY } from '../src/lib/standard-ruleset.js';
+import { openPlayBannedFactionIds } from '../src/lib/weekly-ban.js';
 import { createTestUser, cleanupUsers } from './helpers/db-fixtures.js';
 
 let app: FastifyInstance;
@@ -98,6 +99,14 @@ describe('Open Play: Standard Ruleset banned factions are binding', () => {
   it('resolves a typed faction NAME to its id and ignores unknown entries', async () => {
     await setRuleset(['Undead Legions', 'Not A Faction']);
     expect(await standardBannedFactionIds('DOMINATION', 'ONE_V_ONE')).toEqual(['undead_legions']);
+  });
+
+  it('knows the factions banned in every Open Play game, for the weekly ban', async () => {
+    // Only Domination 1v1 is stored; every other combo keeps the default (Undead Legions).
+    await setRuleset(['Undead Legions', 'skaven']);
+    expect(await standardBannedEverywhereFactionIds()).toEqual(['undead_legions']);
+    await setRuleset(['skaven']);
+    expect(await standardBannedEverywhereFactionIds()).toEqual([]);
   });
 
   it('does not bind tournaments', async () => {

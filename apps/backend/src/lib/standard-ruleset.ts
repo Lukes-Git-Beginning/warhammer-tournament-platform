@@ -16,9 +16,8 @@
  */
 import { z } from 'zod';
 import { BATTLE_TYPES } from '@rizzotto/types';
-import type { $Enums, Prisma } from '@rizzotto/db';
+import type { $Enums } from '@rizzotto/db';
 import { prisma } from '@rizzotto/db';
-import { matchWeeklyBans } from './weekly-ban.js';
 
 export const STANDARD_RULESET_CONFIG_KEY = 'standard_ruleset';
 
@@ -132,41 +131,37 @@ export async function resolveAllStandardRulesets(): Promise<Record<string, Stand
 const normFactionKey = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 /**
- * Faction ids banned by a combo's Standard Ruleset. The admin editor stores faction ids, but an
+ * Resolves banned_factions entries to faction ids. The admin editor stores faction ids, but an
  * entry typed as a name ("Undead Legions") is resolved too (case/spacing-insensitive against the
  * faction id and name), so a legacy free-text entry still bans. Unknown entries are ignored.
  */
-export async function standardBannedFactionIds(
-  battleType: $Enums.BattleType = 'DOMINATION',
-  competitorFormat: $Enums.CompetitorFormat = 'ONE_V_ONE',
-): Promise<string[]> {
-  const ruleset = await resolveStandardRuleset(battleType, competitorFormat);
-  if (ruleset.banned_factions.length === 0) return [];
+async function factionIdResolver(): Promise<(entries: string[]) => string[]> {
   const factions = await prisma.faction.findMany({ select: { id: true, name: true } });
   const byKey = new Map<string, string>();
   for (const f of factions) {
     byKey.set(normFactionKey(f.id), f.id);
     byKey.set(normFactionKey(f.name), f.id);
   }
-  const ids = ruleset.banned_factions
-    .map((entry) => byKey.get(normFactionKey(entry)))
-    .filter((id): id is string => !!id);
-  return [...new Set(ids)];
+  return (entries) => [...new Set(entries.map((entry) => byKey.get(normFactionKey(entry))).filter((id): id is string => !!id))];
+}
+
+/** Faction ids banned by a combo's Standard Ruleset. */
+export async function standardBannedFactionIds(
+  battleType: $Enums.BattleType = 'DOMINATION',
+  competitorFormat: $Enums.CompetitorFormat = 'ONE_V_ONE',
+): Promise<string[]> {
+  const ruleset = await resolveStandardRuleset(battleType, competitorFormat);
+  if (ruleset.banned_factions.length === 0) return [];
+  return (await factionIdResolver())(ruleset.banned_factions);
 }
 
 /**
- * Open Play is bound by the Standard Ruleset (Alex, 2026-10-07): its banned factions cannot be
- * picked there. Tournaments are NOT — a host runs with or without the Standard Rules and bans
- * factions per tournament. Returns [] for a tournament match. On top come the players' weekly bans
- * as the match recorded them (`weekly_bans`), banned for both sides (2026-11-06).
+ * Faction ids the Standard Ruleset bans in every combo, so in every Open Play game. A weekly ban on
+ * one of them adds nothing (lib/weekly-ban.ts): it can't be chosen, and one set before holds no lock.
  */
-export async function openPlayBannedFactionIds(match: {
-  tournament_id: string | null;
-  competitor_format: $Enums.CompetitorFormat;
-  battle_type: $Enums.BattleType | null | undefined;
-  weekly_bans?: Prisma.JsonValue | null;
-}): Promise<string[]> {
-  if (match.tournament_id) return [];
-  const standard = await standardBannedFactionIds(match.battle_type ?? 'DOMINATION', match.competitor_format);
-  return [...new Set([...standard, ...matchWeeklyBans(match.weekly_bans).map((b) => b.factionId)])];
+export async function standardBannedEverywhereFactionIds(): Promise<string[]> {
+  const rulesets = Object.values(await resolveAllStandardRulesets());
+  const resolve = await factionIdResolver();
+  const [first = [], ...rest] = rulesets.map((r) => resolve(r.banned_factions));
+  return first.filter((id) => rest.every((ids) => ids.includes(id)));
 }

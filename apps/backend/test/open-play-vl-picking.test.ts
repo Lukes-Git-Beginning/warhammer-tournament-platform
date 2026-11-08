@@ -16,6 +16,7 @@ import { autoResolveStaleBlindPicks, OPEN_PLAY_BLIND_PICK_TIMEOUT_MS } from '../
 import { autoResolveStaleMatrixActions, MATRIX_PICK_TIMEOUT_MS } from '../src/lib/matrix-auto-resolve.js';
 import { finalizeGameResult } from '../src/lib/match-games.js';
 import { WEEKLY_BAN_LOCK_DAYS } from '../src/lib/weekly-ban.js';
+import { STANDARD_RULESET_CONFIG_KEY } from '../src/lib/standard-ruleset.js';
 import { createTestUser, cleanupUsers } from './helpers/db-fixtures.js';
 
 let app: FastifyInstance;
@@ -54,6 +55,17 @@ async function players() {
   const [p1, p2] = await Promise.all([createTestUser(), createTestUser()]);
   userIds.push(p1.id, p2.id);
   return { p1, p2 };
+}
+
+/** Runs with no stored Standard Ruleset, so the defaults ban Undead Legions in every combo; restores the stored one. */
+async function withDefaultRuleset(run: () => Promise<void>) {
+  const saved = await prisma.adminConfig.findUnique({ where: { key: STANDARD_RULESET_CONFIG_KEY }, select: { value: true } });
+  await prisma.adminConfig.deleteMany({ where: { key: STANDARD_RULESET_CONFIG_KEY } });
+  try {
+    await run();
+  } finally {
+    if (saved) await prisma.adminConfig.create({ data: { key: STANDARD_RULESET_CONFIG_KEY, value: saved.value as object } });
+  }
 }
 
 const setBan = (userId: string, factionId: string | null) =>
@@ -141,6 +153,31 @@ describe('weekly ban on the profile', () => {
   it('rejects an unknown faction', async () => {
     const { p1 } = await players();
     expect((await setBan(p1.id, 'no_such_faction')).statusCode).toBe(400);
+  });
+
+  it("can't be a faction the Standard Ruleset bans everywhere, and one set before holds no lock", async () => {
+    await withDefaultRuleset(async () => {
+      const { p1, p2 } = await players();
+      const refused = await setBan(p1.id, 'undead_legions');
+      expect(refused.statusCode).toBe(400);
+      expect(refused.json().message).toMatch(/Standard Ruleset/);
+      const pub = (await app.inject({ method: 'GET', url: `/api/users/${p1.id}/weekly-ban` })).json();
+      expect(pub).toMatchObject({ factionId: null, covered: false, rulesetBanned: ['undead_legions'] });
+
+      // Set before the rule: covered, so it can change at once, and the new one locks as usual.
+      const now = new Date();
+      await prisma.user.updateMany({ where: { id: { in: [p1.id, p2.id] } }, data: { weekly_ban_faction_id: 'undead_legions', weekly_ban_set_at: now } });
+      const covered = (await app.inject({ method: 'GET', url: `/api/users/${p1.id}/weekly-ban` })).json();
+      expect(covered).toMatchObject({ factionId: 'undead_legions', covered: true, opensAt: null });
+      const changed = await setBan(p1.id, factions[0]!);
+      expect(changed.statusCode).toBe(200);
+      expect(changed.json()).toMatchObject({ factionId: factions[0], covered: false });
+      expect(changed.json().opensAt).not.toBeNull();
+
+      // Dropping a covered one doesn't bring its lock back.
+      expect((await setBan(p2.id, null)).json()).toMatchObject({ factionId: null, setAt: null, opensAt: null });
+      expect((await setBan(p2.id, factions[1]!)).statusCode).toBe(200);
+    });
   });
 
   it('can be cleared with its lock by an admin', async () => {

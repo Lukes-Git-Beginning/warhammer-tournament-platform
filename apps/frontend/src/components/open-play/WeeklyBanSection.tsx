@@ -31,6 +31,8 @@ export function WeeklyBanSection({ userId, isOwn, isAdmin }: { userId: string; i
 
   if (!ban || (!isOwn && !ban.factionId && !isAdmin)) return null;
   const factions = factionsData?.data.map((f) => f.faction) ?? [];
+  // A faction the Standard Ruleset bans everywhere would ban nothing; the saved one stays listed so the select shows it.
+  const choices = factions.filter((f) => !ban.rulesetBanned.includes(f.id) || f.id === ban.factionId);
   const nameOf = (id: string | null) => (id ? (factions.find((f) => f.id === id)?.name ?? id) : 'No ban');
   const opensAt = ban.opensAt ? formatInUserTimezone(ban.opensAt) : null;
   const value = draft ?? ban.factionId ?? '';
@@ -62,7 +64,7 @@ export function WeeklyBanSection({ userId, isOwn, isAdmin }: { userId: string; i
               className="rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none disabled:opacity-60"
             >
               {!ban.factionId && <option value="">No ban</option>}
-              {factions.map((f) => (
+              {choices.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.name}
                 </option>
@@ -88,12 +90,16 @@ export function WeeklyBanSection({ userId, isOwn, isAdmin }: { userId: string; i
             )}
           </div>
           <p className="mt-2 text-xs text-stone-500">
-            Banned for both players in every Open Play match of yours.{' '}
-            {opensAt
-              ? ban.factionId
-                ? `You can change it on ${opensAt}, or drop it any time.`
-                : `You can set a new one on ${opensAt}.`
-              : 'Once saved, you can change it again after 7 days, and drop it any time.'}
+            {ban.covered
+              ? `The Standard Ruleset already bans ${savedName} in every Open Play game, so you can pick another one now.`
+              : <>
+                  Banned for both players in every Open Play match of yours.{' '}
+                  {opensAt
+                    ? ban.factionId
+                      ? `You can change it on ${opensAt}, or drop it any time.`
+                      : `You can set a new one on ${opensAt}.`
+                    : 'Once saved, you can change it again after 7 days, and drop it any time.'}
+                </>}
           </p>
           {save.error && <p className="mt-1 text-xs text-red-400">{save.error.message}</p>}
         </>
@@ -128,7 +134,12 @@ export function WeeklyBanHint({ userId }: { userId: string }) {
   const name = ban.factionId ? (factionsData?.data.find((f) => f.faction.id === ban.factionId)?.faction.name ?? ban.factionId) : null;
   return (
     <p className="text-xs text-stone-500">
-      {name ? (
+      {name && ban.covered ? (
+        <>
+          Your weekly ban: <span className="font-semibold text-stone-300">{name}</span>, which the Standard Ruleset already
+          bans in every Open Play game.{' '}
+        </>
+      ) : name ? (
         <>
           Your weekly ban: <span className="font-semibold text-stone-300">{name}</span>, banned for both players in your
           matches.{' '}

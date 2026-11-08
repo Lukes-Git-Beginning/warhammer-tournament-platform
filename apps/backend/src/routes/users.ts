@@ -15,7 +15,7 @@ import { resolveCompetitors } from '../lib/competitors.js';
 import { loadCalibrationQuestions, classifyWithModel, getClassificationModel } from '../lib/skill-classification-service.js';
 import { SKILL_BATTLE_TYPES } from '../lib/skill-classification.js';
 import { SITE_NOTICES, activeNoticesFor, dismissNotice } from '../lib/site-notices.js';
-import { setWeeklyBan, weeklyBanOpensAt } from '../lib/weekly-ban.js';
+import { readWeeklyBan, setWeeklyBan, type WeeklyBanState } from '../lib/weekly-ban.js';
 import { REPLAY_HIDE_DAYS, setHideReplays } from '../lib/replay-privacy.js';
 
 const meSelect = {
@@ -77,6 +77,17 @@ type MeRow = {
   champion_manual: boolean;
   steam_link: SteamLinkRow | null;
 };
+
+/** The weekly ban as the profile reads it (GET and PUT /api/users/.../weekly-ban). */
+function weeklyBanJson(ban: WeeklyBanState) {
+  return {
+    factionId: ban.factionId,
+    setAt: ban.setAt?.toISOString() ?? null,
+    opensAt: ban.opensAt?.toISOString() ?? null,
+    covered: ban.covered,
+    rulesetBanned: ban.rulesetBanned,
+  };
+}
 
 function serializeMe(user: MeRow) {
   const {
@@ -213,20 +224,14 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true } as const;
   });
 
-  // GET /api/users/:id/weekly-ban — public: the player's weekly Open Play ban and when it can change again.
+  // GET /api/users/:id/weekly-ban — public: the player's weekly Open Play ban, when it can change again, and the
+  // factions it can't be (the Standard Ruleset bans them everywhere).
   fastify.get('/api/users/:id/weekly-ban', async (request, reply) => {
     const parsed = z.object({ id: z.string().uuid() }).safeParse(request.params);
     if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: 'Invalid user id', statusCode: 400 });
-    const user = await fastify.prisma.user.findFirst({
-      where: { id: parsed.data.id, deleted_at: null },
-      select: { weekly_ban_faction_id: true, weekly_ban_set_at: true },
-    });
-    if (!user) return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
-    return {
-      factionId: user.weekly_ban_faction_id,
-      setAt: user.weekly_ban_set_at?.toISOString() ?? null,
-      opensAt: weeklyBanOpensAt(user.weekly_ban_set_at)?.toISOString() ?? null,
-    };
+    const ban = await readWeeklyBan(fastify.prisma, parsed.data.id);
+    if (!ban) return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
+    return weeklyBanJson(ban);
   });
 
   // PUT /api/users/me/weekly-ban — set your weekly Open Play ban (409 while it's locked), or drop it with null (any
@@ -243,12 +248,12 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         opensAt: result.opensAt.toISOString(),
       });
     }
+    if (!result.ok && result.reason === 'ruleset_banned') {
+      const message = 'The Standard Ruleset already bans that faction in every Open Play game';
+      return reply.code(400).send({ error: 'BadRequest', message, statusCode: 400 });
+    }
     if (!result.ok) return reply.code(400).send({ error: 'BadRequest', message: 'Unknown faction', statusCode: 400 });
-    return {
-      factionId: result.factionId,
-      setAt: result.setAt?.toISOString() ?? null,
-      opensAt: weeklyBanOpensAt(result.setAt)?.toISOString() ?? null,
-    };
+    return weeklyBanJson(result.state);
   });
 
   // GET / PUT /api/users/me/replay-privacy — keep your replays hidden for 30 days after each game

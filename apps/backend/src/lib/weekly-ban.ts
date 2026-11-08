@@ -1,4 +1,5 @@
-import type { PrismaClient, Prisma } from '@rizzotto/db';
+import type { $Enums, PrismaClient, Prisma } from '@rizzotto/db';
+import { standardBannedEverywhereFactionIds, standardBannedFactionIds } from './standard-ruleset.js';
 
 /**
  * Weekly Open Play ban (VL picking, plans/discord-open-play.md §11): every player may set one faction on his
@@ -6,6 +7,9 @@ import type { PrismaClient, Prisma } from '@rizzotto/db';
  * after the last one was set at the earliest, so nobody re-targets it per opponent. Dropping it (no ban) works any
  * time and leaves that lock running (Alex 2026-11-08): it only ever lifts a ban, so it can't target anyone. A match
  * keeps the bans as they stood at its creation (Match.weekly_bans), so a series never changes them in between.
+ *
+ * A faction the Standard Ruleset bans in every Open Play game can't be the weekly ban: it would ban nothing. A ban set
+ * on one before (or before the ruleset banned it everywhere) is "covered" and holds no lock (Alex 2026-11-08).
  */
 export const WEEKLY_BAN_LOCK_DAYS = 7;
 const LOCK_MS = WEEKLY_BAN_LOCK_DAYS * 24 * 60 * 60 * 1000;
@@ -28,9 +32,42 @@ export function weeklyBanOpensAt(setAt: Date | null, now = new Date()): Date | n
   return opens > now ? opens : null;
 }
 
+/**
+ * A player's weekly ban as the profile and the join DM show it. `covered`: the Standard Ruleset bans it in every Open
+ * Play game already, so it holds no lock. `rulesetBanned`: those factions, which can't be chosen.
+ */
+export type WeeklyBanState = {
+  factionId: string | null;
+  setAt: Date | null;
+  opensAt: Date | null;
+  covered: boolean;
+  rulesetBanned: string[];
+};
+
+export function weeklyBanState(
+  user: { weekly_ban_faction_id: string | null; weekly_ban_set_at: Date | null },
+  rulesetBanned: string[],
+  now = new Date(),
+): WeeklyBanState {
+  const factionId = user.weekly_ban_faction_id;
+  const covered = !!factionId && rulesetBanned.includes(factionId);
+  const setAt = user.weekly_ban_set_at;
+  return { factionId, setAt, opensAt: covered ? null : weeklyBanOpensAt(setAt, now), covered, rulesetBanned };
+}
+
+/** A live player's weekly ban state; null when there's no such player. */
+export async function readWeeklyBan(prisma: PrismaClient, userId: string): Promise<WeeklyBanState | null> {
+  const [user, rulesetBanned] = await Promise.all([
+    prisma.user.findFirst({ where: { id: userId, deleted_at: null }, select: { weekly_ban_faction_id: true, weekly_ban_set_at: true } }),
+    standardBannedEverywhereFactionIds(),
+  ]);
+  return user ? weeklyBanState(user, rulesetBanned) : null;
+}
+
 export type SetWeeklyBanResult =
-  | { ok: true; factionId: string | null; setAt: Date | null }
+  | { ok: true; state: WeeklyBanState }
   | { ok: false; reason: 'locked'; opensAt: Date }
+  | { ok: false; reason: 'ruleset_banned' }
   | { ok: false; reason: 'unknown_faction' };
 
 /**
@@ -39,22 +76,23 @@ export type SetWeeklyBanResult =
  * again is a no-op that keeps the lock too. The single entry point for the site route and the join DM.
  */
 export async function setWeeklyBan(prisma: PrismaClient, userId: string, factionId: string | null): Promise<SetWeeklyBanResult> {
-  const user = await prisma.user.findUniqueOrThrow({
-    where: { id: userId },
-    select: { weekly_ban_faction_id: true, weekly_ban_set_at: true },
-  });
-  if (user.weekly_ban_faction_id === factionId) {
-    return { ok: true, factionId, setAt: user.weekly_ban_set_at };
-  }
+  const [user, rulesetBanned] = await Promise.all([
+    prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { weekly_ban_faction_id: true, weekly_ban_set_at: true } }),
+    standardBannedEverywhereFactionIds(),
+  ]);
+  const before = weeklyBanState(user, rulesetBanned);
+  if (user.weekly_ban_faction_id === factionId) return { ok: true, state: before };
   if (factionId === null) {
+    // A covered ban never banned anything, so dropping it doesn't bring its lock back.
+    const setAt = before.covered ? null : user.weekly_ban_set_at;
     await prisma.$transaction([
-      prisma.user.update({ where: { id: userId }, data: { weekly_ban_faction_id: null } }),
+      prisma.user.update({ where: { id: userId }, data: { weekly_ban_faction_id: null, weekly_ban_set_at: setAt } }),
       banAudit(prisma, userId, WEEKLY_BAN_AUDIT.drop, userId, user.weekly_ban_faction_id, null),
     ]);
-    return { ok: true, factionId: null, setAt: user.weekly_ban_set_at };
+    return { ok: true, state: weeklyBanState({ weekly_ban_faction_id: null, weekly_ban_set_at: setAt }, rulesetBanned) };
   }
-  const opensAt = weeklyBanOpensAt(user.weekly_ban_set_at);
-  if (opensAt) return { ok: false, reason: 'locked', opensAt };
+  if (rulesetBanned.includes(factionId)) return { ok: false, reason: 'ruleset_banned' };
+  if (before.opensAt) return { ok: false, reason: 'locked', opensAt: before.opensAt };
   if (!(await prisma.faction.findUnique({ where: { id: factionId }, select: { id: true } }))) {
     return { ok: false, reason: 'unknown_faction' };
   }
@@ -63,7 +101,7 @@ export async function setWeeklyBan(prisma: PrismaClient, userId: string, faction
     prisma.user.update({ where: { id: userId }, data: { weekly_ban_faction_id: factionId, weekly_ban_set_at: setAt } }),
     banAudit(prisma, userId, WEEKLY_BAN_AUDIT.set, userId, user.weekly_ban_faction_id, factionId),
   ]);
-  return { ok: true, factionId, setAt };
+  return { ok: true, state: weeklyBanState({ weekly_ban_faction_id: factionId, weekly_ban_set_at: setAt }, rulesetBanned) };
 }
 
 /** Admin: clear a player's ban together with its lock, so he can set a new one at once. False = no such user. */
@@ -96,6 +134,23 @@ export function matchWeeklyBans(value: Prisma.JsonValue | null | undefined): Wee
     const o = v as { userId?: unknown; factionId?: unknown } | null;
     return o && typeof o.userId === 'string' && typeof o.factionId === 'string' ? [{ userId: o.userId, factionId: o.factionId }] : [];
   });
+}
+
+/**
+ * Open Play is bound by the Standard Ruleset (Alex, 2026-10-07): its banned factions cannot be
+ * picked there. Tournaments are NOT — a host runs with or without the Standard Rules and bans
+ * factions per tournament. Returns [] for a tournament match. On top come the players' weekly bans
+ * as the match recorded them (`weekly_bans`), banned for both sides (2026-11-06).
+ */
+export async function openPlayBannedFactionIds(match: {
+  tournament_id: string | null;
+  competitor_format: $Enums.CompetitorFormat;
+  battle_type: $Enums.BattleType | null | undefined;
+  weekly_bans?: Prisma.JsonValue | null;
+}): Promise<string[]> {
+  if (match.tournament_id) return [];
+  const standard = await standardBannedFactionIds(match.battle_type ?? 'DOMINATION', match.competitor_format);
+  return [...new Set([...standard, ...matchWeeklyBans(match.weekly_bans).map((b) => b.factionId)])];
 }
 
 /** A match's weekly bans with their players' names, for the pick screens ("Empire, RizzOtto's weekly ban"). */

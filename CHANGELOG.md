@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [3.2.1] — 2026-11-08
+
+### Fixed
+- **Your weekly ban can no longer be a faction that is banned anyway.** Undead Legions are banned in every Open Play game by the Standard Ruleset, so they are no longer offered on your profile or in the queue DM. If you already picked them, you can choose another faction right away instead of waiting 7 days.
+
 ## [3.2.0] — 2026-11-08
 
 ### Added

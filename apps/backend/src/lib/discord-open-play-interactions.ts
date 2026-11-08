@@ -190,7 +190,9 @@ async function handleJoinDm(fastify: FastifyInstance, i: Interaction, userId: st
       ? '✅ Your weekly ban is set.'
       : result.reason === 'locked'
         ? `Your weekly ban can change again <t:${Math.floor(result.opensAt.getTime() / 1000)}:R>.`
-        : 'That faction is unknown.';
+        : result.reason === 'ruleset_banned'
+          ? 'The Standard Ruleset already bans that faction in every Open Play game. Pick another one.'
+          : 'That faction is unknown.';
     return update(await renderJoinDm(fastify, userId, note));
   }
 

@@ -29,6 +29,7 @@ import {
   sendPreviewCard,
 } from '../src/lib/discord-open-play.js';
 import { joinOpenPlayQueue } from '../src/lib/open-play-queue-service.js';
+import { STANDARD_RULESET_CONFIG_KEY } from '../src/lib/standard-ruleset.js';
 import { createTestUser, cleanupUsers, type TestUser } from './helpers/db-fixtures.js';
 
 const MM_KEYS = ['rizzotto:mm:hold', 'rizzotto:mm:ratelimit', 'rizzotto:mm:contacted', 'rizzotto:mm:tick:lock'];
@@ -228,6 +229,24 @@ describe('join DM', () => {
     expect(done.data.content).toContain('Weekly ban: none. You can set a new one <t:');
     expect(customIds(done.data.components)).not.toContain('oq_bandrop');
     expect(customIds(done.data.components)).not.toContain('oq_ban');
+  });
+
+  it('never offers a faction the Standard Ruleset bans everywhere, and lets a ban on one change at once', async () => {
+    const savedRuleset = await prisma.adminConfig.findUnique({ where: { key: STANDARD_RULESET_CONFIG_KEY }, select: { value: true } });
+    await prisma.adminConfig.deleteMany({ where: { key: STANDARD_RULESET_CONFIG_KEY } }); // defaults: Undead Legions everywhere
+    try {
+      const u = await player('dop_bancovered');
+      const options = (dm: { components: object[] }) => flat(dm.components).find((c) => c.custom_id === 'oq_ban')?.options?.map((o) => o.value);
+      expect(options(await renderJoinDm(app, u.id))).not.toContain('undead_legions');
+
+      await prisma.user.update({ where: { id: u.id }, data: { weekly_ban_faction_id: 'undead_legions', weekly_ban_set_at: new Date() } });
+      const dm = await renderJoinDm(app, u.id);
+      expect(dm.content).toContain('which the Standard Ruleset already bans in every Open Play game. You can pick another one now.');
+      expect(options(dm)?.length).toBeGreaterThan(0);
+      expect(options(dm)).not.toContain('undead_legions');
+    } finally {
+      if (savedRuleset) await prisma.adminConfig.create({ data: { key: STANDARD_RULESET_CONFIG_KEY, value: savedRuleset.value as object } });
+    }
   });
 
   it('2v2 without a team: Join is disabled', async () => {

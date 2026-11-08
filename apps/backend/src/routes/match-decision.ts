@@ -1,7 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { openPlayBannedFactionIds } from '../lib/standard-ruleset.js';
 import { factionPickMode } from '../lib/faction-pick-mode.js';
-import { weeklyBansWithNames } from '../lib/weekly-ban.js';
+import { openPlayBannedFactionIds, weeklyBansWithNames } from '../lib/weekly-ban.js';
 import type { PrismaClient } from '@rizzotto/db';
 import { z } from 'zod';
 import { randomBytes, randomInt } from 'node:crypto';

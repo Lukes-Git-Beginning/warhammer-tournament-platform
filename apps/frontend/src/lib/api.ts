@@ -1466,6 +1466,10 @@ export interface WeeklyBanState {
   factionId: string | null;
   setAt: string | null;
   opensAt: string | null;
+  /** The Standard Ruleset bans this one in every Open Play game already, so it holds no lock. */
+  covered: boolean;
+  /** Factions the Standard Ruleset bans in every Open Play game: they can't be the weekly ban. */
+  rulesetBanned: string[];
 }
 
 export function getWeeklyBan(userId: string): Promise<WeeklyBanState> {
