@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [3.2.2] — 2026-11-10 — Admin tooling
+
+### Fixed
+- The attribution overview for tournament operators counts each community's older links together with its current ones, instead of listing them as a separate source. No player-facing changes.
+
 ## [3.2.1] — 2026-11-08
 
 ### Fixed

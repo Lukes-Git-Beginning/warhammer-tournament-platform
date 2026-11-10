@@ -85,6 +85,14 @@ describe('mergeRefCounts', () => {
     expect(rows[1]).toEqual({ ref: 'tw-official', name: 'Official TW Discord', count: 2 });
   });
 
+  it('counts the ref derived from a destination name for that destination once it has its own ref', () => {
+    const rows = mergeRefCounts([{ ref: 'home', name: 'The RizzOttoverse' }], [
+      { ref: 'home', count: 7 },
+      { ref: 'the-rizzottoverse', count: 2 },
+    ]);
+    expect(rows).toEqual([{ ref: 'home', name: 'The RizzOttoverse', count: 9 }]);
+  });
+
   it('sorts by count desc, then by label ascending', () => {
     const rows = mergeRefCounts(
       [
@@ -125,6 +133,18 @@ describe('mergeTournamentSources', () => {
     expect(rows).toEqual([{ ref: 'new-server', name: 'Fresh Server', clicks: 0, signups: 0, conversion: null }]);
   });
 
+  it('counts links from before a destination got its own ref (name-derived ref) for it', () => {
+    const rows = mergeTournamentSources(
+      [{ ref: 'home', name: 'The RizzOttoverse' }],
+      [
+        { ref: 'home', count: 8 },
+        { ref: 'the-rizzottoverse', count: 2 },
+      ],
+      [{ ref: 'the-rizzottoverse', count: 1 }],
+    );
+    expect(rows).toEqual([{ ref: 'home', name: 'The RizzOttoverse', clicks: 10, signups: 1, conversion: 0.1 }]);
+  });
+
   it('keeps signup sources without a destination as orphaned rows', () => {
     const rows = mergeTournamentSources([], [], [{ ref: 'word-of-mouth', count: 2 }]);
     expect(rows).toEqual([
@@ -161,6 +181,44 @@ describe('mergeOverviewSources', () => {
     expect(rows[0].signups).toBe(12);
     expect(rows[0].newPlayers).toBe(3);
     expect(rows[0].conversion).toBeCloseTo(1.2);
+  });
+
+  it('combines a destination with the ref derived from its name (links shared before its own ref)', () => {
+    const rows = mergeOverviewSources(
+      [{ ref: 'home', name: 'The RizzOttoverse' }],
+      [
+        { ref: 'home', count: 422 },
+        { ref: 'the-rizzottoverse', count: 29 },
+      ],
+      [
+        { ref: 'home', count: 178 },
+        { ref: 'the-rizzottoverse', count: 6 },
+      ],
+      [
+        { ref: 'home', count: 55 },
+        { ref: 'the-rizzottoverse', count: 5 },
+      ],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ ref: 'home', name: 'The RizzOttoverse', clicks: 451, signups: 184, newPlayers: 60 });
+    expect(rows[0].conversion).toBeCloseTo(184 / 451);
+  });
+
+  it("leaves a ref with another destination when it is that destination's own ref", () => {
+    const rows = mergeOverviewSources(
+      [
+        { ref: 'home', name: 'The RizzOttoverse' },
+        { ref: 'the-rizzottoverse', name: 'Old Server' },
+      ],
+      [
+        { ref: 'home', count: 3 },
+        { ref: 'the-rizzottoverse', count: 5 },
+      ],
+      [],
+      [],
+    );
+    expect(rows.find((r) => r.ref === 'home')!.clicks).toBe(3);
+    expect(rows.find((r) => r.ref === 'the-rizzottoverse')).toMatchObject({ name: 'Old Server', clicks: 5 });
   });
 
   it('keeps orphaned event refs (no destination) with name null', () => {

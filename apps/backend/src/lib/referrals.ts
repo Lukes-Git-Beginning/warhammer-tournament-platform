@@ -53,6 +53,21 @@ export function destinationRef(dest: RefLabel): string {
   return dest.ref.trim() || slugifyRef(dest.name);
 }
 
+/**
+ * Which row a recorded ref counts for. Links shared before a destination got an explicit
+ * ref carry the ref derived from its name, so those count for the destination too. A ref
+ * that is some destination's own ref always stays with that destination.
+ */
+function rowRefFor(destinations: RefLabel[]): (ref: string) => string {
+  const own = new Set(destinations.map(destinationRef));
+  const derived = new Map<string, string>();
+  for (const d of destinations) {
+    const slug = slugifyRef(d.name);
+    if (!own.has(slug) && !derived.has(slug)) derived.set(slug, destinationRef(d));
+  }
+  return (ref) => derived.get(ref) ?? ref;
+}
+
 export interface MergedRefRow {
   ref: string;
   /** Destination name, or null for an orphaned ref (event exists, no destination). */
@@ -62,19 +77,22 @@ export interface MergedRefRow {
 
 /**
  * Merge a destination list with single-metric event counts keyed by ref. PURE.
- * Every destination appears (count 0 without events); event refs with no
- * destination are appended with name=null. Sorted by count desc, then label asc.
+ * Every destination appears (count 0 without events); a ref derived from a
+ * destination's name counts for it; other event refs with no destination are
+ * appended with name=null. Sorted by count desc, then label asc.
  */
 export function mergeRefCounts(destinations: RefLabel[], events: CountedRef[]): MergedRefRow[] {
   const rows = new Map<string, MergedRefRow>();
+  const rowRef = rowRefFor(destinations);
   for (const d of destinations) {
     const ref = destinationRef(d);
     rows.set(ref, { ref, name: d.name, count: 0 });
   }
   for (const e of events) {
-    const existing = rows.get(e.ref);
-    if (existing) existing.count = e.count;
-    else rows.set(e.ref, { ref: e.ref, name: null, count: e.count });
+    const ref = rowRef(e.ref);
+    const existing = rows.get(ref);
+    if (existing) existing.count += e.count;
+    else rows.set(ref, { ref, name: null, count: e.count });
   }
   return [...rows.values()].sort(
     (a, b) => b.count - a.count || (a.name ?? a.ref).localeCompare(b.name ?? b.ref),
@@ -110,9 +128,10 @@ export function mergeTournamentSources(
     }
     return row;
   };
+  const rowRef = rowRefFor(destinations);
   for (const d of destinations) ensure(destinationRef(d), d.name);
-  for (const h of hits) ensure(h.ref, null).clicks = h.count;
-  for (const s of signups) ensure(s.ref, null).signups = s.count;
+  for (const h of hits) ensure(rowRef(h.ref), null).clicks += h.count;
+  for (const s of signups) ensure(rowRef(s.ref), null).signups += s.count;
   for (const row of rows.values()) row.conversion = row.clicks > 0 ? row.signups / row.clicks : null;
   return [...rows.values()].sort(
     (a, b) => b.signups - a.signups || b.clicks - a.clicks || (a.name ?? a.ref).localeCompare(b.name ?? b.ref),
@@ -153,10 +172,11 @@ export function mergeOverviewSources(
     }
     return row;
   };
+  const rowRef = rowRefFor(destinations);
   for (const d of destinations) ensure(destinationRef(d), d.name);
-  for (const c of clicks) ensure(c.ref, null).clicks = c.count;
-  for (const s of signups) ensure(s.ref, null).signups = s.count;
-  for (const n of newPlayers) ensure(n.ref, null).newPlayers = n.count;
+  for (const c of clicks) ensure(rowRef(c.ref), null).clicks += c.count;
+  for (const s of signups) ensure(rowRef(s.ref), null).signups += s.count;
+  for (const n of newPlayers) ensure(rowRef(n.ref), null).newPlayers += n.count;
   for (const row of rows.values()) row.conversion = row.clicks > 0 ? row.signups / row.clicks : null;
   return [...rows.values()].sort(
     (a, b) => b.signups - a.signups || b.clicks - a.clicks || (a.name ?? a.ref).localeCompare(b.name ?? b.ref),
